@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-night: #0b0f14;
+  --color-night-2: #121821;
+  --color-night-3: #1a2230;
+  --color-line: #263142;
+  --color-gold: #f5c542;
+  --color-neon: #3dff8c;
+  --color-alert: #ff4d5e;
+  --color-muted: #9aa7b8;
+  --color-turf: #0f5132;
+  --color-turf-dark: #0a3d26;
+  --font-display: 'Bebas Neue', 'Oswald', Impact, system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: var(--color-night);
+  color: #e8eef6;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(61, 255, 140, 0.08), transparent 60%),
+    radial-gradient(80% 40% at 50% 0%, rgba(245, 197, 66, 0.06), transparent 70%),
+    var(--color-night);
+  background-attachment: fixed;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.font-display {
+  letter-spacing: 0.03em;
+}
+
+/* Pelouse : vert profond avec bandes de tonte. */
+.turf {
+  background:
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0 10%, transparent 10% 20%),
+    radial-gradient(120% 80% at 50% 50%, #136b41 0%, var(--color-turf) 55%, var(--color-turf-dark) 100%);
+}
+
+/* Cartes : bordures par rareté. */
+.rarity-bronze {
+  --card-edge: linear-gradient(145deg, #8a5a2b, #d9a066 45%, #6e4520);
+  --card-glow: rgba(217, 160, 102, 0.25);
+}
+.rarity-argent {
+  --card-edge: linear-gradient(145deg, #7d8794, #e6ebf2 45%, #5c6672);
+  --card-glow: rgba(230, 235, 242, 0.2);
+}
+.rarity-or {
+  --card-edge: linear-gradient(145deg, #a8791a, #f5c542 45%, #8a6210);
+  --card-glow: rgba(245, 197, 66, 0.3);
+}
+.rarity-elite {
+  --card-edge: conic-gradient(from var(--holo-angle, 0deg), #f5c542, #ff7ad9, #7ad7ff, #3dff8c, #f5c542);
+  --card-glow: rgba(245, 197, 66, 0.45);
+}
+
+@property --holo-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: true;
+}
+
+.holo {
+  animation: holo-spin 4s linear infinite;
+}
+
+.holo-sheen {
+  background: linear-gradient(115deg, transparent 20%, rgba(255, 255, 255, 0.22) 40%, rgba(122, 215, 255, 0.15) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: holo-sheen 3.2s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes holo-spin {
+  to {
+    --holo-angle: 360deg;
+  }
+}
+
+@keyframes holo-sheen {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holo,
+  .holo-sheen {
+    animation: none;
+  }
+}
+
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
