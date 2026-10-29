@@ -1,8 +1,9 @@
 import { displayName, getPlayer } from './db';
 import { SLOT_POSTE } from './formation';
 import { Rng } from './rng';
+import { perfScore } from './performance';
 import { effectiveNote } from './scoring';
-import type { Player, SlotId, StatsChamp, StatsGardien, TeamState } from './types';
+import type { GameMode, Player, SlotId, StatsChamp, StatsGardien, TeamState } from './types';
 
 export interface MatchEvent {
   minute: number;
@@ -20,40 +21,32 @@ export interface MatchResult {
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 50);
 
-function entries(team: TeamState): { slot: SlotId; player: Player }[] {
+type Entry = { slot: SlotId; player: Player };
+
+function entries(team: TeamState): Entry[] {
   return (Object.keys(team.lineup) as SlotId[]).map((slot) => ({ slot, player: getPlayer(team.lineup[slot]!.playerId) }));
 }
 
-/** Forces d'attaque et de défense (0–100) dérivées des stats, pénalités de poste incluses. */
-export function teamStrength(team: TeamState): { attaque: number; defense: number } {
+/**
+ * Forces d'attaque et de défense (≈ 50–95). En Enchères, elles viennent des performances réelles ;
+ * en Draft, des stats de carte. Les pénalités de poste sont incluses dans les deux cas.
+ */
+export function teamStrength(team: TeamState, mode: GameMode = 'draft'): { attaque: number; defense: number } {
   const es = entries(team);
-  const adj = (slot: SlotId, p: Player, v: number) => v - (p.note - effectiveNote(p, slot));
-  const field = (p: Player) => p.stats as StatsChamp;
-  const att = es
-    .filter((e) => ['AG', 'AD', 'BU'].includes(SLOT_POSTE[e.slot]))
-    .map((e) => {
-      const st = field(e.player);
-      return adj(e.slot, e.player, st.tir * 0.4 + st.dri * 0.3 + st.vit * 0.3);
-    });
-  const mid = es
-    .filter((e) => SLOT_POSTE[e.slot] === 'MC')
-    .map((e) => {
-      const st = field(e.player);
-      return adj(e.slot, e.player, st.pas * 0.6 + st.dri * 0.4);
-    });
-  const def = es
-    .filter((e) => ['DC', 'DG', 'DD'].includes(SLOT_POSTE[e.slot]))
-    .map((e) => {
-      const st = field(e.player);
-      return adj(e.slot, e.player, st.def * 0.6 + st.phy * 0.4);
-    });
-  const gk = es
-    .filter((e) => e.slot === 'GK')
-    .map((e) => {
-      if (e.player.poste !== 'GK') return effectiveNote(e.player, e.slot);
+  const line = (postes: string[]) => es.filter((e) => postes.includes(SLOT_POSTE[e.slot]));
+  const rate = (e: Entry, fromStats: (st: StatsChamp) => number) => {
+    if (mode === 'enchere') return 50 + perfScore(e.player, e.slot) * 0.45;
+    const penalty = e.player.noteGenerale - effectiveNote(e.player, e.slot);
+    if (e.player.poste === 'GK') {
       const st = e.player.stats as StatsGardien;
-      return (st.plo + st.ref + st.pla) / 3;
-    });
+      return (st.plo + st.ref + st.pla) / 3 - penalty;
+    }
+    return fromStats(e.player.stats as StatsChamp) - penalty;
+  };
+  const att = line(['AG', 'AD', 'BU']).map((e) => rate(e, (st) => st.tir * 0.4 + st.dri * 0.3 + st.vit * 0.3));
+  const mid = line(['MC']).map((e) => rate(e, (st) => st.pas * 0.6 + st.dri * 0.4));
+  const def = line(['DC', 'DG', 'DD']).map((e) => rate(e, (st) => st.def * 0.6 + st.phy * 0.4));
+  const gk = line(['GK']).map((e) => rate(e, (st) => st.def));
   return {
     attaque: Math.round(avg(att) * 0.7 + avg(mid) * 0.3),
     defense: Math.round(avg(def) * 0.75 + avg(gk) * 0.25),
@@ -84,9 +77,9 @@ const SAVE_TEXTS = [
 const MISS_TEXTS = [(s: string) => `${s} frappe au-dessus.`, (s: string) => `Poteau pour ${s} ! Si proche…`, (s: string) => `${s} manque le cadre de peu.`];
 
 /** Simulation courte et déterministe (graine) : le score ne change pas le vainqueur officiel. */
-export function simulateMatch(teams: [TeamState, TeamState], names: [string, string], seed: number): MatchResult {
+export function simulateMatch(teams: [TeamState, TeamState], names: [string, string], seed: number, mode: GameMode = 'draft'): MatchResult {
   const rng = new Rng(seed ^ 0x5bd1e995);
-  const strength = [teamStrength(teams[0]), teamStrength(teams[1])] as MatchResult['strength'];
+  const strength = [teamStrength(teams[0], mode), teamStrength(teams[1], mode)] as MatchResult['strength'];
   const score: [number, number] = [0, 0];
   const raw: Omit<MatchEvent, 'score'>[] = [];
 

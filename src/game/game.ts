@@ -1,7 +1,7 @@
 import { advanceAuctionSlot, applyJoker, resolveBids, startAuctionRound, validateBid, validateLiveBid } from './auction';
-import { PLAYERS } from './db';
 import { dealOffer, draftPick, draftReroll } from './draft';
 import { DEFAULT_ORDER } from './formation';
+import { buildPool } from './pool';
 import { Rng } from './rng';
 import type { GameConfig, GameState, Participant, ParticipantIndex, SlotId, TeamState } from './types';
 
@@ -13,7 +13,8 @@ export type GameAction =
   | { type: 'USE_JOKER' }
   | { type: 'CONFIRM_MYSTERY' }
   | { type: 'DRAFT_PICK'; playerId: string }
-  | { type: 'DRAFT_REROLL' };
+  | { type: 'DRAFT_REROLL' }
+  | { type: 'VOTE'; p: ParticipantIndex; forTeam: ParticipantIndex };
 
 export const DEFAULT_CONFIG: Omit<GameConfig, 'seed'> = {
   mode: 'enchere',
@@ -23,6 +24,10 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'seed'> = {
   draftOffer: 'poste',
   draftReroll: true,
   timerSeconds: 10,
+  pool: 'toutes',
+  expert: false,
+  perfWeight: 0.85,
+  verdictDesPotes: true,
 };
 
 export function buildSlotOrder(random: boolean, seed: number): SlotId[] {
@@ -42,12 +47,13 @@ export function createGame(config: GameConfig, participants: [Participant, Parti
     config,
     participants,
     teams: [team(), team()],
-    pool: PLAYERS.map((p) => p.id),
+    pool: buildPool(config),
     rng: config.seed,
     slotIndex: 0,
     phase: config.mode === 'enchere' ? 'encheres' : 'draft',
     auction: null,
     draft: config.mode === 'draft' ? { pickIndex: 0, offer: [] } : null,
+    votes: [null, null],
     log: [],
   };
   const rng = new Rng(s.rng);
@@ -59,6 +65,13 @@ export function createGame(config: GameConfig, participants: [Participant, Parti
 
 /** Reducer pur : renvoie un nouvel état (ou le même si l'action est invalide). */
 export function gameReducer(state: GameState, action: GameAction): GameState {
+  if (action.type === 'VOTE') {
+    // Le vote a lieu une fois les deux onzes complets, avant la révélation des performances.
+    if (state.phase !== 'termine' || state.votes[action.p] !== null) return state;
+    const votes: GameState['votes'] = [...state.votes];
+    votes[action.p] = action.forTeam;
+    return { ...state, votes };
+  }
   if (state.phase === 'termine') return state;
   const s = structuredClone(state);
   const rng = new Rng(s.rng);
