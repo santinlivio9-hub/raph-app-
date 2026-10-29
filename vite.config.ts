@@ -33,6 +33,16 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [
           {
+            // Photos des joueurs (Wikimedia Commons) : gardées en cache pour jouer hors ligne.
+            urlPattern: /^https:\/\/upload\.wikimedia\.org\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'photos-joueurs',
+              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
             handler: 'CacheFirst',
             options: {

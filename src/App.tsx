@@ -1,5 +1,6 @@
 import { MotionConfig } from 'framer-motion';
 import { useEffect } from 'react';
+import { CreditsScreen } from './screens/CreditsScreen';
 import { GameScreen } from './screens/GameScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -40,6 +41,7 @@ export default function App() {
       {screen === 'history' && <HistoryScreen />}
       {screen === 'settings' && <SettingsScreen />}
       {screen === 'tutorial' && <TutorialScreen />}
+      {screen === 'credits' && <CreditsScreen />}
     </MotionConfig>
   );
 }

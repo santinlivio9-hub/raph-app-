@@ -88,7 +88,7 @@ export function DraftBoard({ game, onToast }: { game: GameState; onToast: (m: st
                 }}
                 onClick={() => setSelected(id)}
               >
-                <PlayerCard player={pl} size="sm" selected={selected === id} />
+                <PlayerCard player={pl} mode="draft" size="sm" selected={selected === id} />
               </motion.button>
             );
           })}

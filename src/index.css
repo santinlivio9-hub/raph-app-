@@ -15,23 +15,28 @@
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
-html,
+/* Le fond « stade de nuit » est porté par <html> : body et #root restent transparents
+   pour laisser apparaître les fonds de compétition (couche fixe en z-index négatif). */
+html {
+  min-height: 100%;
+  color: #e8eef6;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(61, 255, 140, 0.08), transparent 60%),
+    radial-gradient(80% 40% at 50% 0%, rgba(245, 197, 66, 0.06), transparent 70%),
+    var(--color-night);
+  background-attachment: fixed;
+}
+
 body,
 #root {
   min-height: 100%;
-  background: var(--color-night);
-  color: #e8eef6;
+  background: transparent;
 }
 
 body {
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
-  background:
-    radial-gradient(120% 60% at 50% -10%, rgba(61, 255, 140, 0.08), transparent 60%),
-    radial-gradient(80% 40% at 50% 0%, rgba(245, 197, 66, 0.06), transparent 70%),
-    var(--color-night);
-  background-attachment: fixed;
 }
 
 button {

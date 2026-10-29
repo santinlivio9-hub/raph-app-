@@ -2,7 +2,18 @@ import type { GameState, ParticipantIndex } from '../game/types';
 import { AnimatedNumber } from './fx';
 
 /** Bandeau du haut : budgets des deux participants, joker, budget max jouable. */
-export function BudgetBar({ game, maxPlayable, active }: { game: GameState; maxPlayable?: [number, number]; active?: ParticipantIndex | null }) {
+export function BudgetBar({
+  game,
+  maxPlayable,
+  active,
+  budgets,
+}: {
+  game: GameState;
+  maxPlayable?: [number, number];
+  active?: ParticipantIndex | null;
+  /** Budgets à afficher (par défaut ceux de la partie) — sert à retarder la baisse jusqu'à la révélation. */
+  budgets?: [number, number];
+}) {
   const isAuction = game.config.mode === 'enchere';
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -13,7 +24,7 @@ export function BudgetBar({ game, maxPlayable, active }: { game: GameState; maxP
         return (
           <div
             key={p}
-            className={`rounded-2xl border bg-night-2 px-3 py-2 transition ${active === p ? 'border-gold' : 'border-line'}`}
+            className={`rounded-2xl border bg-night-2/85 px-3 py-2 backdrop-blur transition ${active === p ? 'border-gold' : 'border-line'}`}
             style={{ boxShadow: `inset 3px 0 0 ${part.color}` }}
           >
             <div className="flex items-center justify-between gap-1 text-sm">
@@ -26,7 +37,7 @@ export function BudgetBar({ game, maxPlayable, active }: { game: GameState; maxP
             {isAuction ? (
               <>
                 <div className="font-display text-3xl leading-tight text-gold">
-                  <AnimatedNumber value={team.budget} /> <span className="text-lg">M€</span>
+                  <AnimatedNumber value={budgets?.[p] ?? team.budget} /> <span className="text-lg">M€</span>
                 </div>
                 <div className="flex items-center justify-between text-[11px] text-muted">
                   <span>{maxPlayable ? `Max jouable ${maxPlayable[p]} M€` : ' '}</span>

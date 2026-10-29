@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PoolPicker } from '../components/PoolPicker';
 import { Button, Page, Segmented, Toggle } from '../components/ui';
 import { buildSlotOrder } from '../game/game';
 import { newSeed } from '../game/rng';
@@ -73,6 +74,9 @@ export function SetupScreen() {
   const [ordreAleatoire, setOrdreAleatoire] = useState(settings.ordreAleatoire);
   const [draftOffer, setDraftOffer] = useState<DraftOffer>(settings.draftOffer);
   const [draftReroll, setDraftReroll] = useState(settings.draftReroll);
+  const [pool, setPool] = useState(settings.pool);
+  const [expert, setExpert] = useState(settings.expert);
+  const [verdict, setVerdict] = useState(settings.verdictDesPotes);
 
   const setName = (i: 0 | 1, v: string) => setNames((n) => (i === 0 ? [v, n[1]] : [n[0], v]));
   const setColor = (i: 0 | 1, v: string) => setColors((c) => (i === 0 ? [v, c[1]] : [c[0], v]));
@@ -94,6 +98,10 @@ export function SetupScreen() {
         draftOffer,
         draftReroll,
         timerSeconds,
+        pool,
+        expert,
+        perfWeight: settings.perfWeight,
+        verdictDesPotes: verdict,
         seed,
       },
       participants,
@@ -104,8 +112,8 @@ export function SetupScreen() {
     <Page title={solo ? 'Solo contre le bot' : 'Nouvelle partie'} onBack={() => go('home')}>
       <div className="flex flex-col gap-5 pb-28">
         <section aria-label="Mode de jeu" className="grid grid-cols-2 gap-3">
-          <ModeCard active={mode === 'enchere'} icon="🔨" title="Enchères" desc="Budget, offres secrètes, joueur mystère et joker." onClick={() => setMode('enchere')} />
-          <ModeCard active={mode === 'draft'} icon="🃏" title="Draft" desc="Sans budget : 1 carte parmi 6, ordre serpent." onClick={() => setMode('draft')} />
+          <ModeCard active={mode === 'enchere'} icon="🔨" title="Enchères" desc="À l'instinct : aucune note. Le vainqueur ? Les vraies perfs." onClick={() => setMode('enchere')} />
+          <ModeCard active={mode === 'draft'} icon="🃏" title="Draft" desc="Sans budget : 1 carte notée parmi 6, ordre serpent." onClick={() => setMode('draft')} />
         </section>
 
         {([0, 1] as const).map((i) => (
@@ -141,6 +149,11 @@ export function SetupScreen() {
         )}
 
         <section className="rounded-2xl border border-line bg-night-2 px-3 py-1">
+          <PoolPicker value={pool} onChange={setPool} />
+          <Toggle label="Mode Expert" hint="Ajoute des joueurs moins connus (notoriété 2)" checked={expert} onChange={setExpert} />
+        </section>
+
+        <section className="rounded-2xl border border-line bg-night-2 px-3 py-1">
           {mode === 'enchere' ? (
             <>
               <Segmented<AuctionType>
@@ -166,6 +179,7 @@ export function SetupScreen() {
                   options={[6, 10, 15].map((v) => ({ value: v, label: `${v} s` }))}
                 />
               )}
+              <Toggle label="Verdict des potes" hint="Chacun vote pour le meilleur onze avant la révélation des stats" checked={verdict} onChange={setVerdict} />
             </>
           ) : (
             <>

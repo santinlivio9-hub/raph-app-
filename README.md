@@ -1,7 +1,11 @@
-# ⚽ Mercato Duel — construis ton 11 de légende
+# ⚽ Mercato Duel — construis ton 11
 
-Jeu de foot à deux (ou contre un bot) : chaque participant construit son **4-3-3**, et le onze le plus fort gagne.
+Jeu de foot à deux (ou contre un bot) : chaque participant construit son **4-3-3**.
+En **Enchères**, on achète à l'instinct, sans aucune note : le vainqueur est désigné à la fin par les
+**performances réelles** des joueurs. En **Draft**, on choisit des cartes notées.
 Application web mobile-first, installable (PWA), entièrement en français.
+
+**Jouer en ligne : https://santinlivio9-hub.github.io/raph-app-/** (mis à jour à chaque push sur `main`).
 
 ## Lancer l'app
 
@@ -13,107 +17,150 @@ npm run build      # typecheck + build de production (dist/)
 npm run preview    # sert le build (PWA / service worker actifs)
 ```
 
-Base joueurs :
+Données :
 
 ```bash
-npm run data:build     # régénère src/data/players.json depuis scripts/players-source.ts
-npm run data:validate  # vérifie postes, doublons, bornes, raretés
+npm run data:build         # régénère src/data/players.json depuis scripts/players-source.ts
+npm run data:validate      # postes, doublons, bornes, notoriété, perf, répartition des prix
+npm run data:photos        # identifiants Wikidata + photos Commons (auteur, licence) → src/data/photos.json
+npm run data:update-stats  # OPTIONNEL : perf via API-Football (clé API_FOOTBALL_KEY dans .env)
 ```
 
 ## Règles du jeu
 
 ### Le principe
 Deux participants, un **4-3-3** chacun : 1 GK, 2 DC, DG, DD, 3 MC, AG, AD, BU.
-Les postes se remplissent dans l'ordre gardien → défense → milieu → attaque (ou dans un ordre aléatoire, option).
+Postes remplis dans l'ordre gardien → défense → milieu → attaque (ou aléatoire, en option).
+
+**Pool de joueurs** (au lancement) : toutes les compétitions, ou une seule (Ligue 1, Premier League, Liga,
+Serie A, Bundesliga) — toute la partie prend alors le thème visuel de cette compétition.
+**Mode Expert** : ajoute les joueurs moins connus (notoriété 2).
 
 ### Mode Enchères
-- Chacun démarre avec **1 500 M€** (réglable : 1 000 / 1 500 / 2 000) et **1 joker**.
-- Pour chaque poste, une carte joueur est révélée avec son **prix minimum** (= sa valeur marché).
-- **Enchères à l'aveugle** (par défaut) : chacun saisit son offre en secret, avec un écran « Passe le téléphone » entre les deux. Une offre doit être ≥ prix minimum ; on peut **passer** (offre 0).
-- **Enchère en direct** (option) : boutons +5 / +10 / +50 M€, minuteur (10 s par défaut) relancé à chaque surenchère.
-- **Gagnant** : l'offre la plus haute, payée et déduite du budget. Égalité → le plus gros budget restant gagne, puis tirage au sort.
-- **Si les deux passent** : la carte est retirée et une nouvelle est révélée.
-- **Joueur mystère** : le perdant reçoit **gratuitement** un autre joueur du même poste, tiré **avant** la révélation de la carte (personne ne le connaît, il n'est même pas présent à l'écran), dont la note est à ± 6 de la carte mise aux enchères. Révélation animée par une carte qui se retourne.
-- **Joker** (1 par partie) : le perdant peut retirer un nouveau joueur mystère (même poste, même fourchette) — il garde alors obligatoirement le second.
-- **Réserve de budget** : une offre est refusée si elle empêche de payer, pour chaque poste restant, le prix minimum le plus bas disponible. Le « budget max jouable » est affiché en permanence et un message clair explique tout refus.
+- Chacun démarre avec **1 500 M€** (réglable) et **1 joker**.
+- Les cartes montrent photo, nom, poste, club, compétition, nationalité, âge et **valeur marché (= prix minimum)**.
+  **Jamais de note ni de stats** pendant l'enchère.
+- Pour chaque poste :
+  1. **Tirage secret des joueurs mystère** du même poste, *avant* la révélation (personne ne les connaît).
+  2. **Révélation** de la carte mise aux enchères.
+  3. **Offres à l'aveugle** (écran « Passe le téléphone » entre les deux), ou **en direct** en option
+     (+5 / +10 / +50 M€, minuteur de 10 s relancé à chaque surenchère). Offre ≥ prix minimum, ou passer.
+     Gagnant = offre la plus haute. Égalité → plus gros budget restant, puis tirage au sort.
+     Les deux passent → carte retirée, nouvelle carte et nouveaux mystères.
+  4. **Mystère payant** : le perdant reçoit son joueur mystère et **paie sa valeur marché**, révélée au
+     retournement de la carte (le compteur de budget descend à ce moment-là).
+  5. **Joker payant** (1 par partie) : le perdant est **remboursé** du premier mystère, en tire un autre du même
+     poste et **paie sa valeur** (prix inconnu jusqu'au tirage). Il garde obligatoirement le second.
+- **Réserve de budget** : une offre est refusée si, après paiement, on ne peut plus payer chaque poste restant au
+  prix du joueur le moins cher disponible. Le **max jouable** est affiché en permanence, avec un message clair.
+- **Mystère abordable** : il est tiré parmi les joueurs dont le prix laisse de quoi compléter son onze —
+  ça peut être une affaire comme un joueur cher.
+- **Cas limite** : si plus rien n'est abordable, on reçoit le joueur le moins cher du poste, **bradé** au montant
+  encore payable.
+
+### Verdict des Enchères : les performances
+- **Score de performance (0–100)** par joueur, sur la saison de référence, normalisé par 90 minutes :
+  | Poste | Composantes (pondération) |
+  |---|---|
+  | BU | buts 45 %, passes D. 20 %, note moyenne 35 % |
+  | AG / AD | buts 30 %, passes D. 30 %, note 40 % |
+  | MC | passes D. 20 %, buts 15 %, tacles + interceptions 25 %, note 40 % |
+  | DC | tacles + interceptions 35 %, clean sheets 25 %, note 40 % |
+  | DG / DD | tacles + interceptions 25 %, clean sheets 20 %, passes D. 15 %, note 40 % |
+  | GK | arrêts 25 %, clean sheets 35 %, note 40 % |
+
+  Chaque composante est comparée à une « référence élite » (ex. 0,8 but/90 pour un buteur) et plafonnée.
+  Pénalités : temps de jeu < 900 min (jusqu'à ×0,5), poste secondaire −4, hors poste −15.
+- **Score d'équipe = 85 % performances + 15 % collectif** (pondération réglable : 70/30, 85/15, 100/0).
+- **Cérémonie** : les performances sont dévoilées poste par poste en alternant les deux équipes, jauges qui montent,
+  puis le vainqueur et les confettis.
+- **Verdict des potes** (option) : avant la révélation, chacun vote pour le onze qu'il trouve le meilleur ;
+  affiché à côté du verdict des stats.
+- Récap : MVP, **meilleure affaire** (meilleure perf par M€), **plus gros flop** (pire perf par M€, joueurs ≥ 5 M€),
+  **mystère le plus chanceux**, détail des scores, simulation de match (pour le fun), partage PNG.
 
 ### Mode Draft
-- Pas de budget. À chaque tour, le participant actif voit **6 cartes** et en choisit **1** (toucher puis valider, ou glisser la carte vers le haut).
-- Option « Poste en cours » (par défaut) : 6 cartes du prochain poste à remplir. Option « Postes libres » : 6 cartes parmi les postes encore libres du onze.
-- Ordre **serpent** : J1, J2, J2, J1, J1, J2… Les 5 cartes non choisies retournent dans la pioche.
-- Option : **1 relance de pioche** par participant et par partie.
+- Pas de budget ; les cartes montrent photo, **note générale**, poste, club et 6 stats.
+- À chaque tour : **6 cartes** du poste en cours (ou des postes libres), on en **choisit 1**. Ordre **serpent**.
+  Option : 1 relance de pioche par participant.
+- Score : **70 % note générale moyenne + 30 % collectif** (−2 poste secondaire, −8 hors poste).
+  L'écran de fin peut aussi afficher les performances réelles.
 
-### Score final
-**Score = 70 % Note générale + 30 % Collectif (+ bonus budget en Enchères)**
+### Collectif (les deux modes)
+Moyenne des 18 liens entre voisins du 4-3-3 : même club = **fort** (100, trait plein vert), même nationalité =
+**moyen** (65, +10 si même compétition, tirets orange), même compétition = **faible** (40, pointillés rouges),
+aucun = 10.
 
-- **Note générale** : moyenne des 11 notes, avec −2 pour un joueur à un poste secondaire et −8 hors poste.
-- **Collectif (0–100)** : moyenne des 18 liens entre voisins du 4-3-3
-  (GK–DC, DC–DC, DC–latéral, DC–MC axial, latéral–MC, latéral–ailier, MC–MC, MC–ailier, MC–BU, ailier–BU).
-  | Lien | Valeur | Affichage sur le terrain |
-  |---|---|---|
-  | Même club | 100 (fort) | trait plein vert |
-  | Même nationalité | 65 (+10 si même ligue aussi) | tirets orange |
-  | Même ligue | 40 (faible) | pointillés rouges |
-  | Aucun | 10 | pointillés gris très discrets |
-- **Bonus budget** (Enchères) : +1 point par tranche de 100 M€ restante, plafonné à +3.
-- Égalité au score → la meilleure note générale l'emporte, sinon match nul.
+### Le bot (solo)
+- Enchères : il estime la **performance cachée** avec un bruit qui dépend du niveau (±25 facile, ±12 moyen,
+  ±5 difficile), la compare au prix et à son budget par poste restant ; il tente le joker si son mystère lui
+  paraît faible pour son prix. Il ne voit jamais l'offre de l'humain.
+- Draft : meilleure carte pondérée par le collectif (bruit en facile, relance d'une pioche faible en difficile).
 
-L'écran de fin montre les deux terrains, le détail des scores, le **MVP** de chaque équipe, la **meilleure affaire**, le **plus gros flop**, et une **simulation de match** minute par minute (pour le fun : elle ne change pas le vainqueur officiel). Les deux onzes peuvent être **partagés en PNG**.
+## Données et photos
 
-### Le bot (mode solo)
-- **Facile** : enchères très aléatoires, choisit souvent au hasard.
-- **Moyen** : enchérit selon la note, son budget par poste restant et un peu de hasard ; tient un peu compte du collectif.
-- **Difficile** : garde 300 M€ pour décrocher le bonus budget maximal, vise les cartes qui créent des liens, utilise son joker quand le mystère est nettement plus faible, relance une pioche décevante.
+### Joueurs — `src/data/players.json`
+- **470 joueurs**, dont **407 de notoriété ≥ 3** (au moins 35 par poste) ; 63 de notoriété 2 réservés au mode Expert.
+- Champs : `id, nom, prenom, poste, postesSecondaires, club, competition, nationalite, age, valeurMarche,
+  noteGenerale, notoriete, wikidataId, stats, rarete, perf {saison, matchs, minutes, buts, passesD, cleanSheets,
+  arrets, tacles, interceptions, noteMoyenne}`.
+- Source unique : `scripts/players-source.ts` (une ligne par joueur), saisie à la main, **sans scraping**.
+- ⚠️ **Valeurs approximatives.** Clubs et valeurs marché ≈ saison 2025-26 (ordre de grandeur Transfermarkt).
+  Performances = **saison 2024-25, championnat, saisies de mémoire** : matchs, minutes, buts, passes, clean sheets
+  et note moyenne sont des estimations ; **tacles, interceptions et arrêts sont calculés** à partir du poste, du
+  niveau et du temps de jeu. Pour des chiffres officiels : `npm run data:update-stats` (API-Football).
+- Répartition des prix (notoriété ≥ 3) : **8 % ≥ 80 M€**, **55 % entre 20 et 80 M€**, **37 % < 20 M€**.
+  Le cahier des charges visait ~20/40/40, mais il n'existe qu'une quarantaine de joueurs réellement estimés
+  80 M€ ou plus : on a préféré rester fidèle aux vraies valeurs plutôt que de les gonfler.
 
-Le bot ne voit jamais l'offre secrète de l'humain.
+### Photos — `src/data/photos.json`
+- **Wikimedia Commons via Wikidata** (propriété P18), licences libres uniquement (CC BY, CC BY-SA, CC0,
+  domaine public) : **457 joueurs sur 470** ont une photo ; les autres ont un avatar (initiales, couleur neutre du club).
+- `scripts/fetch-photos.ts` : identifiant Wikidata par libellé + métier « footballeur » + année de naissance cohérente
+  (repli : titre de l'article Wikipédia), puis vignette 330 px, **auteur et licence** via l'API Commons.
+  Corrections manuelles documentées dans le script (Gnabry : date de naissance erronée sur Wikidata ;
+  Ousmane Diomande : seule fiche trouvée = un homonyme → avatar).
+- Crédit affiché dans la fiche de chaque joueur et dans l'écran **Crédits**. Images mises en cache par le service worker.
+- Aucune image Getty, de site de club, ni carte EA FC/FIFA ; aucun logo de club ou de compétition.
 
-## Décisions prises (non précisées dans le cahier des charges)
+### Thèmes de compétition
+Dégradés + motifs générés en CSS/SVG (aucune image) : Ligue 1 bleu nuit / vert lime, Premier League violet /
+magenta, Liga rouge brique / orange, Serie A bleu marine / turquoise, Bundesliga rouge / blanc cassé, autres
+anthracite / or. Le fond change avec la compétition du joueur en jeu (fondu + léger zoom), sous un voile sombre
+pour garantir le contraste.
 
-- **Réserve de budget** : somme, sur les postes restant à pourvoir après celui en cours, du prix minimum le plus bas encore disponible pour chaque poste. Elle reste modeste (quelques dizaines de M€) mais garantit qu'on peut toujours enchérir sur chaque poste.
-- **Doubles passes à répétition** : après **3 doubles passes** sur un même poste (ou si le poste n'a plus de cartes), chaque participant reçoit un joueur gratuit de ce poste, pour qu'une partie ne puisse pas tourner en rond.
-- **Fourchette du mystère** : ± 6 de la note de la carte ; si aucun joueur ne correspond, la fourchette s'élargit (± 10, puis tout le poste, puis les joueurs ayant ce poste en secondaire).
-- **Égalité de budget lors d'une égalité d'offres** : tirage au sort déterministe (graine de la partie).
-- **Enchère en direct sur un seul téléphone** : les deux panneaux d'enchère sont affichés en même temps ; personne ne peut surenchérir sur sa propre offre ; si le minuteur expire sans offre, c'est une double passe.
-- **Draft « Postes libres »** : une carte peut aussi être proposée pour un poste secondaire libre ; elle y est alors placée avec la pénalité de −2 (affichée avant validation).
-- **Meilleure affaire** (Enchères) : plus grande plus-value « valeur marché − prix payé » (un mystère gratuit compte comme une affaire). **Plus gros flop** : le joueur acheté le plus cher par point de note. En Draft, ces deux moments comparent la note au rang du choix (grosse note choisie tard = affaire).
-- **Vainqueur en cas d'égalité parfaite** : note générale, sinon match nul.
-- **Valeurs et notes** : approximatives, saisies à la main (saison 2025-26), sans scraping. Les 6 stats de chaque joueur sont dérivées de sa note et d'un profil de poste par `scripts/build-players.ts` (déterministe).
-- **Pas de photo, logo ni marque** : avatars générés (initiales + silhouette), couleur neutre calculée à partir du nom du club, drapeaux en emoji.
+## Décisions prises
+
+- **Un mystère par participant**, tiré avant la révélation : chacun est garanti payable par « son » perdant
+  potentiel ; seul celui du perdant sert, l'autre retourne discrètement dans la pioche.
+- **Réserve** = somme, pour chaque poste restant après celui en cours, du prix du joueur le moins cher disponible.
+- **3 doubles passes** sur un même poste → chacun reçoit (et paie) un mystère d'office, pour éviter de tourner en rond.
+- **Pool d'une seule compétition** : si un poste manque de joueurs, il est complété par les joueurs les plus
+  connus des autres championnats (minimum 4 par case + 2).
+- **Égalité de score** : la meilleure perf moyenne (Enchères) ou note générale (Draft) l'emporte, sinon nul.
+- Le **bonus budget** de la v1 est supprimé : en v2, l'argent sert à acheter les mystères.
+- Une partie v1 sauvegardée n'est pas reprise après la mise à jour (règles différentes).
 
 ## Architecture
 
 ```
 src/
   game/              logique pure, sans dépendance UI (testée avec Vitest)
-    types.ts         types du jeu (état sérialisable)
-    rng.ts           générateur pseudo-aléatoire déterministe (état = un nombre)
-    formation.ts     cases du 4-3-3, coordonnées, graphe des liens
-    auction.ts       enchères, réserve de budget, égalités, mystère, joker
+    auction.ts       enchères, réserve, mystères payants, joker remboursé, cas limites
     draft.ts         ordre serpent, offres de 6 cartes, relance
-    game.ts          createGame + gameReducer(state, action) pur
-    scoring.ts       note générale, collectif, bonus, vainqueur, moments forts
+    performance.ts   score de performance 0–100 par poste
+    scoring.ts       collectif, scores d'équipe, vainqueur, moments forts
+    pool.ts          pioche (notoriété, compétition, complément)
     bot.ts           décisions du bot (3 niveaux)
-    simulation.ts    simulation de match minute par minute
-    *.test.ts        tests
-  data/              players.json (380 joueurs), drapeaux
-  store/             Zustand : partie en cours, réglages, historique (localStorage protégé par try/catch)
-  components/        carte joueur, terrain, budget, minuteur, effets
-  screens/           accueil, configuration, enchères, mystère, draft, résultat, historique, réglages, tutoriel
-scripts/             source de la base joueurs, génération et validation
+    simulation.ts    simulation de match
+    game.ts          createGame + gameReducer(state, action) pur
+  data/              players.json, photos.json, drapeaux
+  lib/               thèmes, photos, sons/vibrations, partage, stockage protégé
+  components/        carte, terrain, fiches, fond de compétition, effets
+  screens/           accueil, configuration, enchères, mystère, draft, cérémonie/résultat, historique, réglages, tutoriel, crédits
+scripts/             source joueurs, génération, validation, photos, mise à jour des stats
 ```
 
-**Prêt pour le multijoueur en ligne** : toute la partie est un état JSON modifié uniquement par des actions sérialisables
-(`BID`, `LIVE_BID`, `LIVE_END`, `USE_JOKER`, `CONFIRM_MYSTERY`, `DRAFT_PICK`, `DRAFT_REROLL`) via un reducer pur.
-L'aléatoire vient d'une graine stockée dans l'état : rejouer la même suite d'actions redonne exactement la même partie,
-ce qui permet de synchroniser deux appareils en échangeant seulement les actions.
-
-## Fonctionnalités
-
-- Modes Enchères (aveugle ou direct) et Draft, à deux sur un téléphone ou en solo contre un bot (3 niveaux)
-- Noms d'équipe et couleurs, tutoriel de 4 écrans au premier lancement
-- Sauvegarde automatique : on reprend la partie après avoir fermé l'app
-- Historique des parties et palmarès local (victoires J1 / J2 / bot, nuls)
-- Partage des onzes en image PNG (`html-to-image`, partage natif si disponible, sinon téléchargement)
-- Réglages : ordre des postes, type d'enchère, budget, minuteur, cartes proposées en draft, relance, sons, vibrations
-- Sons synthétisés (Web Audio, aucun fichier) et vibrations à chaque enchère gagnée et révélation
-- PWA installable et jouable hors ligne
+**Prêt pour le multijoueur en ligne** : toute la partie est un état JSON modifié par des actions sérialisables
+(`BID`, `LIVE_BID`, `LIVE_END`, `USE_JOKER`, `CONFIRM_MYSTERY`, `DRAFT_PICK`, `DRAFT_REROLL`, `VOTE`) via un
+reducer pur ; l'aléatoire vient d'une graine stockée dans l'état.

@@ -5,7 +5,7 @@ import { type GameAction, createGame, gameReducer } from '../game/game';
 import type { GameConfig, GameState, Participant } from '../game/types';
 import { safeStorage } from '../lib/storage';
 
-export type Screen = 'home' | 'setup' | 'game' | 'result' | 'history' | 'settings' | 'tutorial';
+export type Screen = 'home' | 'setup' | 'game' | 'result' | 'history' | 'settings' | 'tutorial' | 'credits';
 
 interface GameStore {
   screen: Screen;
@@ -38,7 +38,9 @@ export const useGame = create<GameStore>()(
     }),
     {
       name: 'mercato-duel:game',
-      version: 1,
+      // v2 : nouvelles règles (mystère payant…) — une partie v1 en cours n'est pas reprise.
+      version: 2,
+      migrate: () => ({ game: null, screen: 'home' }) as unknown as GameStore,
       storage: createJSONStorage(() => safeStorage),
       partialize: (s) => ({ game: s.game, screen: s.screen === 'game' ? 'game' : 'home' }),
       // Une sauvegarde qui référence des joueurs absents de la base (ancienne version) est ignorée.

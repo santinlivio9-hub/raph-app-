@@ -20,12 +20,17 @@ export function AuctionCard({ game, compact = false }: { game: GameState; compac
         animate={{ rotateY: 0, scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 160, damping: 18 }}
       >
-        <PlayerCard player={card} size={compact ? 'sm' : 'lg'} />
+        <PlayerCard player={card} mode="enchere" size={compact ? 'sm' : 'lg'} />
       </motion.div>
-      <div className="flex items-center gap-2 rounded-full border border-gold/50 bg-gold/10 px-4 py-1">
-        <span className="text-sm text-muted">Prix minimum</span>
+      <div className="flex items-center gap-2 rounded-full border border-gold/50 bg-black/50 px-4 py-1 backdrop-blur">
+        <span className="text-sm text-white/80">{card.competition} · prix minimum</span>
         <span className="font-display text-2xl text-gold">{card.valeurMarche} M€</span>
       </div>
+      {!compact && (
+        <p className="max-w-xs text-center text-xs text-white/70">
+          Le perdant reçoit un joueur mystère du même poste et paie sa valeur marché.
+        </p>
+      )}
     </div>
   );
 }

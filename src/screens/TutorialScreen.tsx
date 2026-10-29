@@ -38,10 +38,10 @@ const STEPS = [
   },
   {
     title: 'Mode Enchères',
-    body: "1 500 M€ chacun. Une carte est révélée avec son prix minimum : faites vos offres en secret. La plus haute l'emporte. Le perdant reçoit gratuitement un joueur mystère du même poste… et peut le changer une fois avec son joker 🃏.",
+    body: "1 500 M€ chacun et aucune note : on achète à l'instinct, au prix du marché. Offres secrètes, la plus haute l'emporte. Le perdant reçoit un joueur mystère du même poste et paie sa valeur marché… Son joker 🃏 le rembourse et en tire un autre (à payer aussi).",
     visual: (
       <div className="flex items-center justify-center gap-3">
-        <PlayerCard player={sample} size="sm" />
+        <PlayerCard player={sample} mode="enchere" size="sm" />
         <span className="font-display text-3xl text-muted">VS</span>
         <div className="w-full max-w-[150px]">
           <CardBack size="sm" />
@@ -51,7 +51,7 @@ const STEPS = [
   },
   {
     title: 'Mode Draft',
-    body: "Pas de budget : à ton tour, choisis 1 carte parmi 6. L'ordre est en serpent (J1, J2, J2, J1…) pour que ce soit équitable. Une relance de pioche par partie.",
+    body: "Pas de budget, et cette fois les cartes montrent la note générale : à ton tour, choisis 1 carte parmi 6. Ordre en serpent (J1, J2, J2, J1…) pour l'équité. Une relance de pioche par partie.",
     visual: (
       <div className="mx-auto grid w-60 grid-cols-3 gap-2">
         {PLAYERS.filter((p) => p.poste === 'MC')
@@ -59,7 +59,7 @@ const STEPS = [
           .map((p, i) => (
             <motion.div key={p.id} initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: i * 0.08 }}>
               <div className={`grid aspect-[5/7] place-items-center rounded-xl border-2 ${i === 1 ? 'border-neon bg-neon/10' : 'border-line bg-night-3'}`}>
-                <span className="font-display text-2xl text-gold">{p.note}</span>
+                <span className="font-display text-2xl text-gold">{p.noteGenerale}</span>
               </div>
             </motion.div>
           ))}
@@ -67,8 +67,8 @@ const STEPS = [
     ),
   },
   {
-    title: 'Le score final',
-    body: '70 % note générale (pénalité si un joueur est hors poste) + 30 % collectif : des voisins du même club, de la même nationalité ou de la même ligue créent des liens. En Enchères, le budget gardé rapporte jusqu’à +3.',
+    title: 'Le verdict',
+    body: "Enchères : les vraies performances de la saison (buts, passes, clean sheets, note…) sont révélées à la fin — 85 % perf + 15 % collectif. Draft : 70 % note générale + 30 % collectif. Les liens viennent des voisins du même club, pays ou championnat.",
     visual: (
       <div className="mx-auto w-56">
         <Pitch team={demoTeam} color="#4FA3FF" mini />

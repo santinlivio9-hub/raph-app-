@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { BudgetBar } from '../components/BudgetBar';
+import { CompetitionBackground } from '../components/CompetitionBackground';
 import { Pitch } from '../components/Pitch';
-import { TeamSheet } from '../components/TeamSheet';
+import { TeamSheet, pitchBadge } from '../components/TeamSheet';
 import { Button, IconButton, Modal, Toast } from '../components/ui';
 import { currentSlot, maxPlayable } from '../game/auction';
+import { getPlayer } from '../game/db';
 import { draftTurn, freeSlots } from '../game/draft';
 import { POSTE_LABEL, SLOT_POSTE } from '../game/formation';
 import type { GameState, ParticipantIndex } from '../game/types';
+import { themeFor } from '../lib/themes';
 import { useGame } from '../store/game';
 import { BlindAuction } from './game/BlindAuction';
 import { DraftBoard } from './game/DraftBoard';
@@ -30,6 +33,7 @@ export function GameScreen({ game }: { game: GameState }) {
   const [sheet, setSheet] = useState<ParticipantIndex | null>(null);
   const [menu, setMenu] = useState(false);
   const [toast, showToast] = useToast();
+  const [mysteryRevealed, setMysteryRevealed] = useState(false);
   const isAuction = game.config.mode === 'enchere';
 
   // Annonce les doubles passes (carte retirée).
@@ -67,10 +71,24 @@ export function GameScreen({ game }: { game: GameState }) {
     return draftTurn(game) === p && game.config.draftOffer === 'poste' ? freeSlots(game, p)[0] : null;
   };
 
+  // Fond : la compétition choisie pour toute la partie, sinon celle du joueur en jeu.
+  const cardId = game.auction?.result?.cardId ?? game.auction?.cardId;
+  const theme = themeFor(game.config.pool !== 'toutes' ? game.config.pool : cardId ? getPlayer(cardId).competition : null);
+
+  // Tant que le mystère n'est pas retourné, son prix ne doit pas fuiter via le compteur de budget.
+  const result = game.phase === 'mystere' ? game.auction?.result : null;
+  let shownBudgets: [number, number] | undefined;
+  if (result && !mysteryRevealed) {
+    const loser = result.winner === 0 ? 1 : 0;
+    shownBudgets = [game.teams[0].budget, game.teams[1].budget];
+    shownBudgets[loser] += result.mysteryPrice;
+  }
+
   const max: [number, number] | undefined = isAuction && game.phase === 'encheres' ? [maxPlayable(game, 0), maxPlayable(game, 1)] : undefined;
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+      <CompetitionBackground theme={theme} />
       <Toast message={toast} />
       <header className="flex items-center gap-3">
         <IconButton label="Menu de la partie" onClick={() => setMenu(true)}>
@@ -83,7 +101,7 @@ export function GameScreen({ game }: { game: GameState }) {
         <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">{isAuction ? '🔨 Enchères' : '🃏 Draft'}</span>
       </header>
 
-      <BudgetBar game={game} maxPlayable={max} active={isAuction ? null : draftTurn(game)} />
+      <BudgetBar game={game} maxPlayable={max} active={isAuction ? null : draftTurn(game)} budgets={shownBudgets} />
 
       <main className="flex flex-1 flex-col">
         {game.phase === 'encheres' &&
@@ -93,7 +111,7 @@ export function GameScreen({ game }: { game: GameState }) {
           ) : (
             <LiveAuction key={game.auction.cardId} game={game} />
           ))}
-        {game.phase === 'mystere' && game.auction?.result && <MysteryReveal key={game.auction.result.cardId} game={game} />}
+        {game.phase === 'mystere' && game.auction?.result && <MysteryReveal key={game.auction.result.cardId} game={game} onRevealed={setMysteryRevealed} />}
         {game.phase === 'draft' && <DraftBoard game={game} onToast={showToast} />}
       </main>
 
@@ -105,13 +123,20 @@ export function GameScreen({ game }: { game: GameState }) {
               <span className="truncate text-muted">{game.participants[p].name}</span>
               <span className="ml-auto text-muted">🔍</span>
             </div>
-            <Pitch team={game.teams[p]} color={game.participants[p].color} mini highlight={highlight(p)} />
+            <Pitch team={game.teams[p]} color={game.participants[p].color} mini highlight={highlight(p)} badge={pitchBadge(game.config, false)} />
           </button>
         ))}
       </footer>
 
       {sheet !== null && (
-        <TeamSheet open onClose={() => setSheet(null)} participant={game.participants[sheet]} team={game.teams[sheet]} mode={game.config.mode} />
+        <TeamSheet
+          open
+          onClose={() => setSheet(null)}
+          participant={game.participants[sheet]}
+          team={game.teams[sheet]}
+          config={game.config}
+          reveal={false}
+        />
       )}
 
       <Modal open={menu} onClose={() => setMenu(false)} label="Menu de la partie">

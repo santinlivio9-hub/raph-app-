@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { displayName, getPlayer } from '../game/db';
 import { SLOTS, SLOT_COORDS, SLOT_POSTE } from '../game/formation';
-import { type LinkStrength, positionPenalty, teamLinks } from '../game/scoring';
-import type { SlotId, TeamState } from '../game/types';
-import { Avatar } from './PlayerCard';
+import { type LinkStrength, teamLinks } from '../game/scoring';
+import type { Pick, SlotId, TeamState } from '../game/types';
+import { PlayerFace } from './PlayerCard';
 
 export const LINK_STYLE: Record<LinkStrength, { color: string; dash?: string; width: number; label: string }> = {
   fort: { color: '#3DFF8C', width: 4, label: 'Même club (lien fort)' },
@@ -37,6 +37,8 @@ export function Pitch({
   showLinks = true,
   highlight,
   label,
+  badge,
+  onPlayer,
 }: {
   team: TeamState;
   color: string;
@@ -44,6 +46,10 @@ export function Pitch({
   showLinks?: boolean;
   highlight?: SlotId | null;
   label?: string;
+  /** Petit chiffre affiché sur chaque joueur (prix, note ou perf selon le contexte) ; rien par défaut. */
+  badge?: (pick: Pick) => string | null;
+  /** Rend chaque joueur cliquable (fiche détaillée). */
+  onPlayer?: (playerId: string) => void;
 }) {
   const links = showLinks ? teamLinks(team.lineup) : [];
   const token = mini ? 'h-6 w-6' : 'h-11 w-11';
@@ -98,7 +104,7 @@ export function Pitch({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ type: 'spring', stiffness: 260, damping: 20 }}
                 >
-                  <PlayerToken slot={slot} playerId={pick.playerId} color={color} mini={mini} />
+                  <PlayerToken pick={pick} color={color} mini={mini} badge={badge?.(pick) ?? null} onPlayer={onPlayer} />
                 </motion.div>
               ) : (
                 <motion.div
@@ -120,32 +126,47 @@ export function Pitch({
   );
 }
 
-function PlayerToken({ slot, playerId, color, mini }: { slot: SlotId; playerId: string; color: string; mini: boolean }) {
-  const p = getPlayer(playerId);
-  const penalty = positionPenalty(p, slot);
-  if (mini) {
-    return (
-      <div className="relative">
-        <Avatar player={p} size={24} ring={color} />
-        <span className="font-display absolute -bottom-1 -right-2 rounded bg-night px-0.5 text-[9px] leading-tight text-gold">{p.note}</span>
-      </div>
-    );
-  }
-  return (
+function PlayerToken({
+  pick,
+  color,
+  mini,
+  badge,
+  onPlayer,
+}: {
+  pick: Pick;
+  color: string;
+  mini: boolean;
+  badge: string | null;
+  onPlayer?: (playerId: string) => void;
+}) {
+  const p = getPlayer(pick.playerId);
+  const outOfPosition = p.poste !== SLOT_POSTE[pick.slot];
+  const body = mini ? (
+    <div className="relative">
+      <PlayerFace player={p} size={26} ring={color} />
+      {badge && <span className="font-display absolute -bottom-1 -right-2 rounded bg-night px-0.5 text-[9px] leading-tight text-gold">{badge}</span>}
+    </div>
+  ) : (
     <>
       <div className="relative">
-        <Avatar player={p} size={44} ring={color} />
-        <span className="font-display absolute -right-3 -top-1 rounded-md bg-night px-1 text-sm leading-tight text-gold ring-1 ring-gold/40">
-          {p.note}
-        </span>
-        {penalty > 0 && (
-          <span className="absolute -bottom-1 -left-3 rounded bg-alert px-1 text-[10px] font-bold" title="Pénalité de poste">
-            −{penalty}
+        <PlayerFace player={p} size={44} ring={color} />
+        {badge && (
+          <span className="font-display absolute -right-3 -top-1 rounded-md bg-night px-1 text-sm leading-tight text-gold ring-1 ring-gold/40">{badge}</span>
+        )}
+        {outOfPosition && (
+          <span className="absolute -bottom-1 -left-3 rounded bg-alert px-1 text-[10px] font-bold" title="Joueur hors de son poste naturel">
+            ⚠
           </span>
         )}
       </div>
       <span className="mt-0.5 max-w-full truncate rounded bg-black/55 px-1 text-[11px] font-semibold leading-tight">{displayName(p).split(' ').slice(-1)[0]}</span>
     </>
+  );
+  if (!onPlayer) return body;
+  return (
+    <button type="button" className="flex w-full flex-col items-center" onClick={() => onPlayer(p.id)} aria-label={`Fiche de ${displayName(p)}`}>
+      {body}
+    </button>
   );
 }
 

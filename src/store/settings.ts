@@ -13,6 +13,12 @@ export interface Settings {
   sons: boolean;
   vibrations: boolean;
   tutorialSeen: boolean;
+  /** Pool de joueurs par défaut : 'toutes' ou une compétition. */
+  pool: string;
+  expert: boolean;
+  /** Part des performances dans le score Enchères (0,5 à 1). */
+  perfWeight: number;
+  verdictDesPotes: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -25,6 +31,10 @@ export const DEFAULT_SETTINGS: Settings = {
   sons: true,
   vibrations: true,
   tutorialSeen: false,
+  pool: 'toutes',
+  expert: false,
+  perfWeight: 0.85,
+  verdictDesPotes: true,
 };
 
 interface SettingsStore extends Settings {
@@ -39,6 +49,7 @@ export const useSettings = create<SettingsStore>()(
       update: (patch) => set(patch),
       reset: () => set({ ...DEFAULT_SETTINGS, tutorialSeen: true }),
     }),
+    // La fusion par défaut (superficielle) donne leur valeur par défaut aux réglages ajoutés en v2.
     { name: 'mercato-duel:settings', storage: createJSONStorage(() => safeStorage) },
   ),
 );

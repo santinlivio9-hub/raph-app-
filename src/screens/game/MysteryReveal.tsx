@@ -12,7 +12,7 @@ import { useGame } from '../../store/game';
 
 const TIE_TEXT = { aucun: '', budget: 'Égalité : départagée au budget restant', tirage: 'Égalité parfaite : tirage au sort !' } as const;
 
-export function MysteryReveal({ game }: { game: GameState }) {
+export function MysteryReveal({ game, onRevealed }: { game: GameState; onRevealed: (revealed: boolean) => void }) {
   const dispatch = useGame((s) => s.dispatch);
   const r = game.auction!.result!;
   const winner = game.participants[r.winner];
@@ -35,11 +35,13 @@ export function MysteryReveal({ game }: { game: GameState }) {
     return () => window.clearTimeout(t);
   }, [r.mysteryId]);
 
+  // Le budget du perdant ne descend qu'au moment où son mystère (et donc son prix) est révélé.
   useEffect(() => {
+    onRevealed(revealed);
     if (!revealed) return;
     sfx.reveal();
     haptics.reveal();
-  }, [revealed, r.mysteryId]);
+  }, [revealed, r.mysteryId, onRevealed]);
 
   // Le bot perdant décide seul d'utiliser (ou non) son joker.
   useEffect(() => {
@@ -77,15 +79,31 @@ export function MysteryReveal({ game }: { game: GameState }) {
           <span className="text-xs text-muted" style={{ color: winner.color }}>
             {winner.name} · acheté
           </span>
-          <PlayerCard player={card} size="sm" />
+          <PlayerCard player={card} mode="enchere" size="sm" />
+          <span className="text-xs text-white/80">payé {r.price} M€</span>
         </div>
         <div className="flex flex-col items-center gap-1">
           <span className="text-xs" style={{ color: loser.color }}>
-            {loser.name} · {r.jokerUsed ? 'mystère n°2 (joker)' : 'mystère gratuit'}
+            {loser.name} · {r.jokerUsed ? 'mystère n°2 (joker)' : 'joueur mystère'}
           </span>
-          <button className="w-full max-w-[150px]" onClick={() => setRevealed(true)} aria-label="Révéler le joueur mystère" disabled={revealed}>
-            <FlipCard key={mystery.id} player={mystery} revealed={revealed} size="sm" />
+          <button className="w-full max-w-[170px]" onClick={() => setRevealed(true)} aria-label="Révéler le joueur mystère" disabled={revealed}>
+            <FlipCard key={mystery.id} player={mystery} revealed={revealed} mode="enchere" size="sm" />
           </button>
+          <AnimatePresence>
+            {revealed && (
+              <motion.span
+                key={r.mysteryId}
+                className="font-display rounded-full bg-alert/90 px-3 text-xl text-white"
+                initial={{ y: -10, opacity: 0, scale: 1.4 }}
+                animate={{ y: 0, opacity: 1, scale: 1 }}
+              >
+                −{r.mysteryPrice} M€{r.mysteryPrice < mystery.valeurMarche && <span className="ml-1 text-xs">(bradé)</span>}
+              </motion.span>
+            )}
+          </AnimatePresence>
+          {r.jokerUsed && r.firstMysteryPrice !== undefined && (
+            <span className="text-[11px] text-neon">Premier mystère remboursé : +{r.firstMysteryPrice} M€</span>
+          )}
         </div>
       </div>
 
@@ -101,7 +119,8 @@ export function MysteryReveal({ game }: { game: GameState }) {
         {revealed && humanLoserCanJoker && (
           <>
             <p className="text-center text-sm text-muted">
-              {loser.name}, ce joueur ne te plaît pas ? Ton joker retire un autre mystère du même poste — tu devras garder le second.
+              {loser.name}, pas convaincu ? Ton joker te rembourse ce mystère et en tire un autre du même poste, payé à sa valeur marché —
+              prix inconnu jusqu'au tirage, et tu devras le garder.
             </p>
             <Button variant="dark" onClick={() => dispatch({ type: 'USE_JOKER' })}>
               🃏 Utiliser mon joker

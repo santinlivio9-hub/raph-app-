@@ -68,7 +68,7 @@ export function HomeScreen() {
         <Button variant="dark" onClick={() => openSetup(true)} className="text-lg">
           🤖 Solo contre le bot
         </Button>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <Button variant="ghost" onClick={() => go('history')}>
             Historique
           </Button>
@@ -77,6 +77,9 @@ export function HomeScreen() {
           </Button>
           <Button variant="ghost" onClick={() => go('tutorial')}>
             Règles
+          </Button>
+          <Button variant="ghost" onClick={() => go('credits')}>
+            Crédits
           </Button>
         </div>
       </nav>

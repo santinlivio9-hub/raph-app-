@@ -1,27 +1,198 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Confetti } from '../components/fx';
-import { Pitch } from '../components/Pitch';
-import { Avatar } from '../components/PlayerCard';
-import { TeamSheet } from '../components/TeamSheet';
+import { CompetitionBackground } from '../components/CompetitionBackground';
+import { AnimatedNumber, Confetti } from '../components/fx';
+import { LinkLegend, Pitch } from '../components/Pitch';
+import { PlayerFace } from '../components/PlayerCard';
+import { TeamSheet, pitchBadge } from '../components/TeamSheet';
 import { Button, Page, TeamName, Toast } from '../components/ui';
-import { displayName } from '../game/db';
-import { DEFAULT_ORDER } from '../game/formation';
+import { botVote } from '../game/bot';
+import { displayName, getPlayer } from '../game/db';
+import { DEFAULT_ORDER, SLOTS, SLOT_POSTE } from '../game/formation';
 import { buildSlotOrder } from '../game/game';
+import { perfScore } from '../game/performance';
 import { newSeed } from '../game/rng';
 import { type Highlight, type TeamScore, computeTeamScore, decideWinner, teamHighlights } from '../game/scoring';
 import { simulateMatch } from '../game/simulation';
-import type { GameState, ParticipantIndex } from '../game/types';
-import { sfx } from '../lib/feedback';
+import type { GameState, ParticipantIndex, SlotId } from '../game/types';
+import { haptics, sfx } from '../lib/feedback';
 import { shareNodeAsPng } from '../lib/share';
+import { NIGHT_THEME, themeFor } from '../lib/themes';
 import { useGame } from '../store/game';
 import { useHistory } from '../store/history';
+
+const fmt = (v: number, d = 1) => v.toFixed(d).replace('.', ',');
+const both = [0, 1] as const;
+
+// ───────────────────────── Verdict des potes ─────────────────────────
+
+function VoteStage({ game }: { game: GameState }) {
+  const dispatch = useGame((s) => s.dispatch);
+  const voter = both.find((p) => game.votes[p] === null && !game.participants[p].isBot);
+
+  // Le bot vote tout seul.
+  useEffect(() => {
+    for (const p of both) {
+      const part = game.participants[p];
+      if (part.isBot && game.votes[p] === null) dispatch({ type: 'VOTE', p, forTeam: botVote(game, p, part.botLevel ?? 'moyen') });
+    }
+  }, [game, dispatch]);
+
+  if (voter === undefined) return null;
+  const who = game.participants[voter];
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="text-center">
+        <div className="text-4xl" aria-hidden>
+          🗳️
+        </div>
+        <h2 className="font-display text-4xl">Verdict des potes</h2>
+        <p className="text-sm text-white/80">
+          Avant de voir les vraies stats : <strong style={{ color: who.color }}>{who.name}</strong>, quel onze est le meilleur ?
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {both.map((p) => (
+          <button
+            key={p}
+            onClick={() => {
+              sfx.bid();
+              dispatch({ type: 'VOTE', p: voter, forTeam: p });
+            }}
+            className="rounded-2xl border-2 border-line bg-night-2/80 p-2 text-left transition hover:border-gold active:scale-[0.98]"
+            aria-label={`Voter pour ${game.participants[p].name}`}
+          >
+            <TeamName name={game.participants[p].name} color={game.participants[p].color} className="mb-1 text-sm font-semibold" />
+            <Pitch team={game.teams[p]} color={game.participants[p].color} mini badge={pitchBadge(game.config, false)} />
+            <div className="mt-2 rounded-xl bg-gold py-2 text-center font-semibold text-night">Je vote !</div>
+          </button>
+        ))}
+      </div>
+      <p className="text-center text-xs text-muted">Le vote est pour le fun : seul le verdict des performances désigne le vainqueur.</p>
+    </div>
+  );
+}
+
+// ───────────────────────── Cérémonie de révélation ─────────────────────────
+
+interface Reveal {
+  team: ParticipantIndex;
+  slot: SlotId;
+}
+
+function Gauge({ value, color, label }: { value: number; color: string; label: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between text-sm">
+        <span className="truncate font-semibold">{label}</span>
+        <span className="font-display text-3xl text-gold">
+          <AnimatedNumber value={Math.round(value)} />
+        </span>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-night-3" role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+        <motion.div className="h-full rounded-full" style={{ background: color }} animate={{ width: `${Math.min(100, value)}%` }} transition={{ duration: 0.6 }} />
+      </div>
+    </div>
+  );
+}
+
+function Ceremony({ game, onDone }: { game: GameState; onDone: () => void }) {
+  // Poste par poste, en alternant les deux équipes.
+  const steps = useMemo<Reveal[]>(() => SLOTS.flatMap((slot) => both.map((team) => ({ team, slot }))), []);
+  const [shown, setShown] = useState(0);
+  const done = shown >= steps.length;
+
+  useEffect(() => {
+    if (done) {
+      const t = window.setTimeout(onDone, 1400);
+      return () => window.clearTimeout(t);
+    }
+    const t = window.setTimeout(() => setShown((n) => n + 1), shown === 0 ? 600 : 1100);
+    return () => window.clearTimeout(t);
+  }, [shown, done, onDone]);
+
+  useEffect(() => {
+    if (shown > 0 && !done) {
+      sfx.tap();
+      haptics.reveal();
+    }
+  }, [shown, done]);
+
+  const revealed = steps.slice(0, shown);
+  const avgFor = (team: ParticipantIndex) => {
+    const xs = revealed.filter((r) => r.team === team).map((r) => perfScore(getPlayer(game.teams[team].lineup[r.slot]!.playerId), r.slot));
+    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  };
+  const last = revealed.at(-1);
+  const lastPick = last ? game.teams[last.team].lineup[last.slot]! : null;
+  const lastPlayer = lastPick ? getPlayer(lastPick.playerId) : null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="text-center">
+        <h2 className="font-display text-4xl">La révélation</h2>
+        <p className="text-sm text-white/80">Performances réelles, saison {getPlayer(game.teams[0].lineup.GK!.playerId).perf.saison}</p>
+      </div>
+      <div className="space-y-3 rounded-2xl border border-line bg-night-2/85 p-3 backdrop-blur">
+        {both.map((p) => (
+          <Gauge key={p} value={avgFor(p)} color={game.participants[p].color} label={game.participants[p].name} />
+        ))}
+        <p className="text-center text-[11px] text-muted">Perf moyenne des joueurs révélés (sur 100)</p>
+      </div>
+      <div className="grid min-h-[170px] place-items-center">
+        <AnimatePresence mode="wait">
+          {last && lastPlayer && lastPick && (
+            <motion.div
+              key={`${last.team}-${last.slot}`}
+              className="flex flex-col items-center gap-1 text-center"
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: game.participants[last.team].color }}>
+                {game.participants[last.team].name} · {SLOT_POSTE[last.slot]}
+              </span>
+              <PlayerFace player={lastPlayer} size={84} ring={game.participants[last.team].color} />
+              <span className="font-semibold">{displayName(lastPlayer)}</span>
+              <span className="font-display text-5xl text-neon">
+                <AnimatedNumber value={Math.round(perfScore(lastPlayer, last.slot))} />
+              </span>
+              <span className="text-xs text-muted">
+                {lastPlayer.perf.buts} buts · {lastPlayer.perf.passesD} passes · note {fmt(lastPlayer.perf.noteMoyenne)} · payé {lastPick.price} M€
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {both.map((p) => {
+          const visible = new Set(revealed.filter((r) => r.team === p).map((r) => r.slot));
+          return (
+            <Pitch
+              key={p}
+              team={game.teams[p]}
+              color={game.participants[p].color}
+              mini
+              showLinks={done}
+              badge={(pick) => (visible.has(pick.slot) ? String(Math.round(perfScore(getPlayer(pick.playerId), pick.slot))) : '?')}
+            />
+          );
+        })}
+      </div>
+      <Button variant="ghost" onClick={onDone}>
+        Passer la cérémonie
+      </Button>
+    </div>
+  );
+}
+
+// ───────────────────────── Résultat final ─────────────────────────
 
 function HighlightRow({ icon, label, h }: { icon: string; label: string; h: Highlight | null }) {
   if (!h) return null;
   return (
     <li className="flex items-center gap-2 py-1.5">
-      <Avatar player={h.player} size={34} />
+      <PlayerFace player={h.player} size={36} />
       <div className="min-w-0 flex-1">
         <div className="text-[11px] uppercase tracking-wide text-muted">
           <span aria-hidden>{icon}</span> {label}
@@ -33,13 +204,22 @@ function HighlightRow({ icon, label, h }: { icon: string; label: string; h: High
   );
 }
 
-function Breakdown({ scores, game }: { scores: [TeamScore, TeamScore]; game: GameState }) {
-  const rows: { label: string; get: (s: TeamScore) => string }[] = [
-    { label: 'Note générale (×0,7)', get: (s) => s.noteGenerale.toFixed(1) },
-    { label: 'Collectif (×0,3)', get: (s) => Math.round(s.collectif).toString() },
-    ...(game.config.mode === 'enchere' ? [{ label: 'Bonus budget', get: (s: TeamScore) => `+${s.bonusBudget}` }] : []),
-    { label: 'Score final', get: (s) => s.total.toFixed(2) },
-  ];
+function Breakdown({ scores, game, showPerf }: { scores: [TeamScore, TeamScore]; game: GameState; showPerf: boolean }) {
+  const auction = game.config.mode === 'enchere';
+  const w = scores[0].weight;
+  const pct = (v: number) => fmt(v * 100, 0).replace(',0', '');
+  const rows: { label: string; get: (s: TeamScore) => string; total?: boolean }[] = auction
+    ? [
+        { label: `Perf moyenne (×${pct(w)} %)`, get: (s) => fmt(s.perfMoyenne) },
+        { label: `Collectif (×${pct(1 - w)} %)`, get: (s) => String(Math.round(s.collectif)) },
+        { label: 'Score final', get: (s) => fmt(s.total, 2), total: true },
+      ]
+    : [
+        { label: 'Note générale (×70 %)', get: (s) => fmt(s.noteGenerale) },
+        { label: 'Collectif (×30 %)', get: (s) => String(Math.round(s.collectif)) },
+        ...(showPerf ? [{ label: 'Perf réelle (pour info)', get: (s: TeamScore) => fmt(s.perfMoyenne) }] : []),
+        { label: 'Score final', get: (s) => fmt(s.total, 2), total: true },
+      ];
   return (
     <table className="w-full text-sm">
       <thead>
@@ -53,18 +233,21 @@ function Breakdown({ scores, game }: { scores: [TeamScore, TeamScore]; game: Gam
         </tr>
       </thead>
       <tbody>
-        {rows.map((r, k) => (
-          <tr key={r.label} className={`border-t border-line ${k === rows.length - 1 ? 'font-display text-2xl text-gold' : ''}`}>
-            <td className={`py-1.5 ${k === rows.length - 1 ? 'font-sans text-sm text-white' : ''}`}>{r.label}</td>
+        {rows.map((r) => (
+          <tr key={r.label} className={`border-t border-line ${r.total ? 'font-display text-2xl text-gold' : ''}`}>
+            <td className={`py-1.5 ${r.total ? 'font-sans text-sm text-white' : ''}`}>{r.label}</td>
             <td className="py-1.5 text-right">{r.get(scores[0])}</td>
             <td className="py-1.5 text-right">{r.get(scores[1])}</td>
           </tr>
         ))}
-        {game.config.mode === 'enchere' && (
+        {auction && (
           <tr className="border-t border-line text-xs text-muted">
-            <td className="py-1.5">Budget restant</td>
-            <td className="py-1.5 text-right">{game.teams[0].budget} M€</td>
-            <td className="py-1.5 text-right">{game.teams[1].budget} M€</td>
+            <td className="py-1.5">Dépensé / restant</td>
+            {both.map((p) => (
+              <td key={p} className="py-1.5 text-right">
+                {game.config.startBudget - game.teams[p].budget} / {game.teams[p].budget} M€
+              </td>
+            ))}
           </tr>
         )}
       </tbody>
@@ -74,7 +257,7 @@ function Breakdown({ scores, game }: { scores: [TeamScore, TeamScore]; game: Gam
 
 function MatchSim({ game }: { game: GameState }) {
   const match = useMemo(
-    () => simulateMatch(game.teams, [game.participants[0].name, game.participants[1].name], game.config.seed),
+    () => simulateMatch(game.teams, [game.participants[0].name, game.participants[1].name], game.config.seed, game.config.mode),
     [game],
   );
   const [shown, setShown] = useState(0);
@@ -84,8 +267,7 @@ function MatchSim({ game }: { game: GameState }) {
   useEffect(() => {
     if (!running || shown >= match.events.length) return;
     const t = window.setTimeout(() => {
-      const ev = match.events[shown];
-      if (ev.kind === 'but') sfx.goal();
+      if (match.events[shown].kind === 'but') sfx.goal();
       setShown((n) => n + 1);
     }, shown === 0 ? 200 : 900);
     return () => window.clearTimeout(t);
@@ -100,7 +282,7 @@ function MatchSim({ game }: { game: GameState }) {
   const done = shown >= match.events.length;
 
   return (
-    <section className="rounded-2xl border border-line bg-night-2 p-3" aria-label="Simulation de match">
+    <section className="rounded-2xl border border-line bg-night-2/90 p-3" aria-label="Simulation de match">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="font-display text-2xl">Le match</h2>
         <span className="text-xs text-muted">pour le fun — ne change pas le vainqueur</span>
@@ -117,20 +299,18 @@ function MatchSim({ game }: { game: GameState }) {
       </div>
       {shown > 0 && (
         <ol ref={feed} className="no-scrollbar mb-2 max-h-56 space-y-1 overflow-y-auto">
-          <AnimatePresence initial={false}>
-            {match.events.slice(0, shown).map((e, i) => (
-              <motion.li
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className={`flex gap-2 rounded-lg px-2 py-1 text-sm ${e.kind === 'but' ? 'bg-neon/15 font-semibold' : ''}`}
-              >
-                <span className="font-display w-8 shrink-0 text-gold">{e.minute}'</span>
-                {e.team !== null && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: game.participants[e.team].color }} aria-hidden />}
-                <span>{e.text}</span>
-              </motion.li>
-            ))}
-          </AnimatePresence>
+          {match.events.slice(0, shown).map((e, i) => (
+            <motion.li
+              key={i}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className={`flex gap-2 rounded-lg px-2 py-1 text-sm ${e.kind === 'but' ? 'bg-neon/15 font-semibold' : ''}`}
+            >
+              <span className="font-display w-8 shrink-0 text-gold">{e.minute}'</span>
+              {e.team !== null && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ background: game.participants[e.team].color }} aria-hidden />}
+              <span>{e.text}</span>
+            </motion.li>
+          ))}
         </ol>
       )}
       {!running ? (
@@ -148,18 +328,22 @@ function MatchSim({ game }: { game: GameState }) {
   );
 }
 
-export function ResultScreen({ game }: { game: GameState }) {
-  const { go, start, quit } = useGame();
+function FinalStage({ game, scores }: { game: GameState; scores: [TeamScore, TeamScore] }) {
+  const { start, quit } = useGame();
   const record = useHistory((s) => s.record);
   const [sheet, setSheet] = useState<ParticipantIndex | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [showPerf, setShowPerf] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
+  const auction = game.config.mode === 'enchere';
+  const reveal = auction || showPerf;
 
-  const scores = useMemo(() => [computeTeamScore(game.teams[0], game.config.mode), computeTeamScore(game.teams[1], game.config.mode)] as [TeamScore, TeamScore], [game]);
-  const outcome = decideWinner(scores[0], scores[1]);
-  const highlights = useMemo(() => [teamHighlights(game.teams[0], game.config.mode), teamHighlights(game.teams[1], game.config.mode)], [game]);
+  const outcome = decideWinner(scores[0], scores[1], game.config.mode);
+  const highlights = useMemo(() => both.map((p) => teamHighlights(game.teams[p], game.config.mode)), [game]);
   const winner = outcome.winner === null ? null : game.participants[outcome.winner];
+  const votesDone = game.config.verdictDesPotes && auction && game.votes.every((v) => v !== null);
+  const theme = game.config.pool !== 'toutes' ? themeFor(game.config.pool) : NIGHT_THEME;
 
   useEffect(() => {
     record({
@@ -196,84 +380,139 @@ export function ResultScreen({ game }: { game: GameState }) {
   };
 
   return (
-    <Page title="Résultat" onBack={() => go('home')}>
+    <div className="flex flex-col gap-4 pb-6">
       <Toast message={toast} />
       {winner && <Confetti />}
-      <div className="flex flex-col gap-4 pb-6">
-        <motion.div
-          className="text-center"
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-        >
-          <div className="text-5xl" aria-hidden>
-            {winner ? '🏆' : '🤝'}
-          </div>
-          <h2 className="font-display text-4xl leading-tight">
-            {winner ? (
-              <>
-                <span style={{ color: winner.color }}>{winner.name}</span> remporte le duel !
-              </>
-            ) : (
-              'Match nul parfait !'
-            )}
-          </h2>
-          {outcome.reason === 'note' && <p className="text-sm text-muted">Égalité au score : départagés à la note générale.</p>}
-        </motion.div>
+      <motion.div className="text-center" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 220, damping: 14 }}>
+        <div className="text-5xl" aria-hidden>
+          {winner ? '🏆' : '🤝'}
+        </div>
+        <h2 className="font-display text-4xl leading-tight">
+          {winner ? (
+            <>
+              <span style={{ color: winner.color }}>{winner.name}</span> remporte le duel !
+            </>
+          ) : (
+            'Match nul parfait !'
+          )}
+        </h2>
+        {outcome.reason === 'departage' && (
+          <p className="text-sm text-muted">Égalité au score : départagés {auction ? 'aux performances' : 'à la note générale'}.</p>
+        )}
+      </motion.div>
 
-        <div ref={shareRef} className="rounded-2xl bg-night p-2">
-          <div className="grid grid-cols-2 gap-2">
-            {([0, 1] as const).map((p) => (
-              <button key={p} onClick={() => setSheet(p)} className="text-left" aria-label={`Voir le onze de ${game.participants[p].name}`}>
-                <div className="mb-1 flex items-center justify-between gap-1">
-                  <TeamName name={game.participants[p].name} color={game.participants[p].color} className="text-sm font-semibold" />
-                  <span className={`font-display text-2xl ${outcome.winner === p ? 'text-neon' : 'text-white/80'}`}>{scores[p].total.toFixed(1)}</span>
-                </div>
-                <Pitch team={game.teams[p]} color={game.participants[p].color} mini />
-              </button>
+      {votesDone && (
+        <section className="grid grid-cols-2 gap-2 text-center" aria-label="Verdict des potes contre verdict des stats">
+          <div className="rounded-2xl border border-line bg-night-2/90 p-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted">🗳️ Verdict des potes</div>
+            {both.map((p) => (
+              <div key={p} className="truncate text-sm">
+                {game.participants[p].name} → <strong style={{ color: game.participants[game.votes[p]!].color }}>{game.participants[game.votes[p]!].name}</strong>
+              </div>
             ))}
           </div>
-          <div className="font-display mt-1 text-center text-sm text-muted">
-            MERCATO <span className="text-gold">DUEL</span> · {game.config.mode === 'enchere' ? 'Enchères' : 'Draft'}
-          </div>
-        </div>
-        <p className="-mt-2 text-center text-xs text-muted">Touche un terrain pour voir le onze en grand.</p>
-
-        <section className="rounded-2xl border border-line bg-night-2 p-3">
-          <Breakdown scores={scores} game={game} />
-        </section>
-
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {([0, 1] as const).map((p) => (
-            <div key={p} className="rounded-2xl border border-line bg-night-2 p-3" style={{ boxShadow: `inset 3px 0 0 ${game.participants[p].color}` }}>
-              <TeamName name={game.participants[p].name} color={game.participants[p].color} className="font-semibold" />
-              <ul className="mt-1 divide-y divide-line">
-                <HighlightRow icon="⭐" label="MVP" h={highlights[p].mvp} />
-                <HighlightRow icon="💰" label="Meilleure affaire" h={highlights[p].affaire} />
-                <HighlightRow icon="📉" label="Plus gros flop" h={highlights[p].flop} />
-              </ul>
+          <div className="rounded-2xl border border-line bg-night-2/90 p-2">
+            <div className="text-[11px] uppercase tracking-wide text-muted">📊 Verdict des stats</div>
+            <div className="font-display text-2xl" style={{ color: winner?.color }}>
+              {winner ? winner.name : 'Égalité'}
             </div>
-          ))}
-        </section>
-
-        <MatchSim game={game} />
-
-        <div className="safe-bottom flex flex-col gap-3">
-          <Button variant="dark" onClick={share} disabled={sharing}>
-            {sharing ? 'Création de l’image…' : '📤 Partager les onzes (PNG)'}
-          </Button>
-          <div className="grid grid-cols-2 gap-3">
-            <Button onClick={rematch}>Revanche</Button>
-            <Button variant="ghost" onClick={quit}>
-              Accueil
-            </Button>
+            <div className="text-[11px] text-muted">
+              {game.votes.filter((v) => v === outcome.winner).length}/2 potes avaient vu juste
+            </div>
           </div>
+        </section>
+      )}
+
+      <div ref={shareRef} className="relative overflow-hidden rounded-2xl p-2" style={{ background: theme.background }}>
+        <div className="absolute inset-0 bg-black/35" aria-hidden />
+        <div className="relative grid grid-cols-2 gap-2">
+          {both.map((p) => (
+            <button key={p} onClick={() => setSheet(p)} className="text-left" aria-label={`Voir le onze de ${game.participants[p].name}`}>
+              <div className="mb-1 flex items-center justify-between gap-1">
+                <TeamName name={game.participants[p].name} color={game.participants[p].color} className="text-sm font-semibold" />
+                <span className={`font-display text-2xl ${outcome.winner === p ? 'text-neon' : 'text-white/80'}`}>{fmt(scores[p].total)}</span>
+              </div>
+              <Pitch team={game.teams[p]} color={game.participants[p].color} mini badge={pitchBadge(game.config, reveal)} />
+            </button>
+          ))}
+        </div>
+        <div className="font-display relative mt-1 text-center text-sm text-white/80">
+          MERCATO <span className="text-gold">DUEL</span> · {auction ? 'Enchères' : 'Draft'}
+          {game.config.pool !== 'toutes' && ` · ${game.config.pool}`}
+        </div>
+      </div>
+      <p className="-mt-2 text-center text-xs text-muted">Touche un terrain pour voir le onze et la fiche de chaque joueur.</p>
+
+      <section className="rounded-2xl border border-line bg-night-2/90 p-3">
+        <Breakdown scores={scores} game={game} showPerf={showPerf} />
+        {!auction && (
+          <button className="mt-2 min-h-[44px] w-full text-sm text-gold underline-offset-4 hover:underline" onClick={() => setShowPerf((v) => !v)}>
+            {showPerf ? 'Masquer les performances réelles' : 'Afficher aussi les performances réelles'}
+          </button>
+        )}
+        <div className="mt-2">
+          <LinkLegend />
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {both.map((p) => (
+          <div key={p} className="rounded-2xl border border-line bg-night-2/90 p-3" style={{ boxShadow: `inset 3px 0 0 ${game.participants[p].color}` }}>
+            <TeamName name={game.participants[p].name} color={game.participants[p].color} className="font-semibold" />
+            <ul className="mt-1 divide-y divide-line">
+              <HighlightRow icon="⭐" label="MVP" h={highlights[p].mvp} />
+              <HighlightRow icon="💰" label="Meilleure affaire" h={highlights[p].affaire} />
+              <HighlightRow icon="📉" label="Plus gros flop" h={highlights[p].flop} />
+              <HighlightRow icon="🍀" label="Mystère le plus chanceux" h={highlights[p].chanceux} />
+            </ul>
+          </div>
+        ))}
+      </section>
+
+      <MatchSim game={game} />
+
+      <div className="safe-bottom flex flex-col gap-3">
+        <Button variant="dark" onClick={share} disabled={sharing}>
+          {sharing ? 'Création de l’image…' : '📤 Partager les onzes (PNG)'}
+        </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button onClick={rematch}>Revanche</Button>
+          <Button variant="ghost" onClick={quit}>
+            Accueil
+          </Button>
         </div>
       </div>
 
       {sheet !== null && (
-        <TeamSheet open onClose={() => setSheet(null)} participant={game.participants[sheet]} team={game.teams[sheet]} mode={game.config.mode} />
+        <TeamSheet open onClose={() => setSheet(null)} participant={game.participants[sheet]} team={game.teams[sheet]} config={game.config} reveal={reveal} />
       )}
+    </div>
+  );
+}
+
+type Stage = 'vote' | 'ceremonie' | 'final';
+
+export function ResultScreen({ game }: { game: GameState }) {
+  const go = useGame((s) => s.go);
+  const alreadySeen = useHistory((s) => s.entries.some((e) => e.id === game.id));
+  const scores = useMemo(() => both.map((p) => computeTeamScore(game.teams[p], game.config)) as [TeamScore, TeamScore], [game]);
+  const auction = game.config.mode === 'enchere';
+  const votesPending = auction && game.config.verdictDesPotes && game.votes.some((v) => v === null);
+  const [stage, setStage] = useState<Stage>(() => (alreadySeen || !auction ? 'final' : votesPending ? 'vote' : 'ceremonie'));
+
+  useEffect(() => {
+    if (stage === 'vote' && !votesPending) setStage('ceremonie');
+  }, [stage, votesPending]);
+
+  const theme = game.config.pool !== 'toutes' ? themeFor(game.config.pool) : NIGHT_THEME;
+  const title = stage === 'vote' ? 'Avant le verdict' : stage === 'ceremonie' ? 'Cérémonie' : 'Résultat';
+
+  return (
+    <Page title={title} onBack={() => go('home')}>
+      <CompetitionBackground theme={theme} />
+      {stage === 'vote' && <VoteStage game={game} />}
+      {stage === 'ceremonie' && <Ceremony game={game} onDone={() => setStage('final')} />}
+      {stage === 'final' && <FinalStage game={game} scores={scores} />}
     </Page>
   );
 }

@@ -105,7 +105,7 @@ function estimatePerf(poste: Poste, note: number, h: number, raw: number[]): Per
   };
 }
 
-export function parseSource(source: string, wikidata: Record<string, string> = {}): Player[] {
+export function parseSource(source: string, wikidata: Record<string, string> = {}, perfOverrides: Record<string, Partial<Perf>> = {}): Player[] {
   return source
     .trim()
     .split('\n')
@@ -142,12 +142,18 @@ export function parseSource(source: string, wikidata: Record<string, string> = {
         wikidataId: wikidata[id] ?? null,
         stats,
         rarete: rareteOf(n),
-        perf: estimatePerf(p, n, h, rawPerf),
+        perf: { ...estimatePerf(p, n, h, rawPerf), ...perfOverrides[id] },
       };
     });
 }
 
 export const WIKIDATA_IDS_FILE = new URL('./wikidata-ids.json', import.meta.url);
+/** Performances rafraîchies par `npm run data:update-stats` (facultatif). */
+export const PERF_OVERRIDES_FILE = new URL('./perf-overrides.json', import.meta.url);
+
+export function readPerfOverrides(): Record<string, Partial<Perf>> {
+  return existsSync(PERF_OVERRIDES_FILE) ? JSON.parse(readFileSync(PERF_OVERRIDES_FILE, 'utf8')) : {};
+}
 
 export function readWikidataIds(): Record<string, string> {
   return existsSync(WIKIDATA_IDS_FILE) ? JSON.parse(readFileSync(WIKIDATA_IDS_FILE, 'utf8')) : {};
@@ -159,7 +165,7 @@ export function writePlayers(players: Player[]): void {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const players = parseSource(SOURCE, readWikidataIds());
+  const players = parseSource(SOURCE, readWikidataIds(), readPerfOverrides());
   writePlayers(players);
   const withQ = players.filter((p) => p.wikidataId).length;
   console.log(`✔ ${players.length} joueurs écrits dans src/data/players.json (${withQ} avec identifiant Wikidata)`);

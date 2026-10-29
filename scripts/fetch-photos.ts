@@ -10,7 +10,7 @@
 // Respecte les règles d'usage Wikimedia : User-Agent explicite, requêtes groupées et espacées.
 import { writeFileSync } from 'node:fs';
 import { SOURCE } from './players-source.ts';
-import { WIKIDATA_IDS_FILE, parseSource, readWikidataIds, writePlayers } from './build-players.ts';
+import { WIKIDATA_IDS_FILE, parseSource, readPerfOverrides, readWikidataIds, writePlayers } from './build-players.ts';
 import type { Player } from '../src/game/types.ts';
 
 
@@ -266,7 +266,7 @@ async function main() {
     if (file && creditByFile[file]) photos[p.id] = creditByFile[file];
   }
   writeFileSync(PHOTOS_FILE, JSON.stringify(photos, null, 1) + '\n');
-  writePlayers(parseSource(SOURCE, ids));
+  writePlayers(parseSource(SOURCE, ids, readPerfOverrides()));
   console.log(`\n✔ ${Object.keys(photos).length}/${players.length} photos sous licence libre → src/data/photos.json`);
 }
 
