@@ -51,6 +51,11 @@ export const COUNTRIES: Record<string, { nom: string; drapeau: string }> = {
   KR: { nom: 'Corée du Sud', drapeau: '🇰🇷' },
   JP: { nom: 'Japon', drapeau: '🇯🇵' },
   NZ: { nom: 'Nouvelle-Zélande', drapeau: '🇳🇿' },
+  CR: { nom: 'Costa Rica', drapeau: '🇨🇷' },
+  AM: { nom: 'Arménie', drapeau: '🇦🇲' },
+  IS: { nom: 'Islande', drapeau: '🇮🇸' },
+  BA: { nom: 'Bosnie-Herzégovine', drapeau: '🇧🇦' },
+  GA: { nom: 'Gabon', drapeau: '🇬🇦' },
 };
 
 const BY_NAME = new Map(Object.values(COUNTRIES).map((c) => [c.nom, c.drapeau]));

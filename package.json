@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "data:build": "tsx scripts/build-players.ts",
-    "data:validate": "tsx scripts/validate-players.ts"
+    "data:validate": "tsx scripts/validate-players.ts",
+    "data:photos": "tsx scripts/fetch-photos.ts",
+    "data:update-stats": "tsx scripts/update-stats.ts"
   },
   "dependencies": {
     "framer-motion": "^12.43.0",

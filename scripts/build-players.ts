@@ -1,24 +1,31 @@
 // Génère src/data/players.json à partir de scripts/players-source.ts.
-// Les 6 stats sont dérivées de la note et d'un profil par poste, avec une variation
-// déterministe (même entrée → même sortie).
-import { writeFileSync } from 'node:fs';
+// - Les 6 stats « carte » (Draft) sont dérivées de la note générale et d'un profil par poste.
+// - Les volumes défensifs de `perf` (tacles, interceptions, arrêts) sont ESTIMÉS à partir du poste,
+//   du niveau et du temps de jeu ; matchs, minutes, buts, passes, clean sheets et note moyenne sont saisis.
+// - Les identifiants Wikidata viennent de scripts/wikidata-ids.json (rempli par `npm run data:photos`).
+// Tout est déterministe : même entrée → même sortie.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SOURCE } from './players-source.ts';
+import { PERF_SEASON, SOURCE } from './players-source.ts';
 import { COUNTRIES } from '../src/data/countries.ts';
-import type { Player, Poste, Rarete } from '../src/game/types.ts';
+import type { Perf, Player, Poste, Rarete } from '../src/game/types.ts';
 
-const LEAGUES: Record<string, string> = {
+export const COMPETITIONS: Record<string, string> = {
+  L1: 'Ligue 1',
   PL: 'Premier League',
-  LL: 'LaLiga',
+  LIGA: 'Liga',
   SA: 'Serie A',
   BL: 'Bundesliga',
-  L1: 'Ligue 1',
-  LP: 'Liga Portugal',
-  ED: 'Eredivisie',
   SPL: 'Saudi Pro League',
-  TSL: 'Süper Lig',
   MLS: 'MLS',
-  GRL: 'Super League Grèce',
+  LP: 'Liga Portugal',
+  TSL: 'Süper Lig',
+  ED: 'Eredivisie',
+  SPFL: 'Scottish Premiership',
+  BRA: 'Brasileirão',
+  ARG: 'Liga Profesional',
+  MEX: 'Liga MX',
+  QSL: 'Qatar Stars League',
 };
 
 const PROFILES: Record<Poste, number[]> = {
@@ -31,6 +38,18 @@ const PROFILES: Record<Poste, number[]> = {
   AG: [5, -4, -6, 2, -48, -18],
   AD: [5, -4, -6, 2, -48, -18],
   BU: [-2, 3, -14, -6, -52, -2],
+};
+
+/** Tacles et interceptions par 90 minutes (profil moyen par poste). */
+const DEF_RATES: Record<Poste, [number, number]> = {
+  GK: [0, 0],
+  DC: [1.4, 1.5],
+  DG: [1.8, 1.1],
+  DD: [1.8, 1.1],
+  MC: [2.0, 1.1],
+  AG: [0.8, 0.4],
+  AD: [0.8, 0.4],
+  BU: [0.4, 0.2],
 };
 
 export function rareteOf(note: number): Rarete {
@@ -46,6 +65,7 @@ export function slugify(s: string): string {
     .replace(/[̀-ͯ]/g, '')
     .replace(/[đĐ]/g, 'd')
     .replace(/[øØ]/g, 'o')
+    .replace(/[ıİ]/g, 'i')
     .replace(/[^a-zA-Z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .toLowerCase();
@@ -62,16 +82,41 @@ function hash(s: string): number {
 
 const clamp = (v: number) => Math.max(20, Math.min(99, Math.round(v)));
 
-export function parseSource(source: string): Player[] {
+/** Variation déterministe dans [1 − amp, 1 + amp]. */
+const jitter = (h: number, shift: number, amp: number) => 1 - amp + (((h >>> shift) & 0xff) / 255) * 2 * amp;
+
+function estimatePerf(poste: Poste, note: number, h: number, raw: number[]): Perf {
+  const [matchs, minutes, buts, passesD, cleanSheets, noteMoyenne] = raw;
+  const nineties = minutes / 90;
+  const level = 0.85 + (note - 75) / 60; // les meilleurs défendent un peu plus (et mieux placés)
+  const [tac, int] = DEF_RATES[poste];
+  const csRate = matchs ? cleanSheets / matchs : 0;
+  return {
+    saison: PERF_SEASON,
+    matchs,
+    minutes,
+    buts,
+    passesD,
+    cleanSheets,
+    arrets: poste === 'GK' ? Math.round(nineties * (3.4 - 2.2 * csRate) * jitter(h, 0, 0.15)) : 0,
+    tacles: Math.round(nineties * tac * level * jitter(h, 8, 0.25)),
+    interceptions: Math.round(nineties * int * level * jitter(h, 16, 0.25)),
+    noteMoyenne,
+  };
+}
+
+export function parseSource(source: string, wikidata: Record<string, string> = {}): Player[] {
   return source
     .trim()
     .split('\n')
     .filter((l) => l.trim() && !l.startsWith('//'))
     .map((line) => {
-      const [nom, prenom, poste, sec, club, ligue, nat, age, note, valeur] = line.split('|');
+      const [nom, prenom, poste, sec, club, comp, nat, age, note, valeur, noto, perf] = line.split('|');
       const country = COUNTRIES[nat];
       if (!country) throw new Error(`Nationalité inconnue « ${nat} » : ${line}`);
-      if (!LEAGUES[ligue]) throw new Error(`Ligue inconnue « ${ligue} » : ${line}`);
+      if (!COMPETITIONS[comp]) throw new Error(`Compétition inconnue « ${comp} » : ${line}`);
+      const rawPerf = (perf ?? '').split(',').map(Number);
+      if (rawPerf.length !== 6 || rawPerf.some((x) => Number.isNaN(x))) throw new Error(`perf invalide : ${line}`);
       const p = poste as Poste;
       const n = Number(note);
       const id = slugify(`${prenom} ${nom}`);
@@ -88,20 +133,34 @@ export function parseSource(source: string): Player[] {
         poste: p,
         postesSecondaires: sec ? (sec.split(',') as Poste[]) : [],
         club,
-        ligue: LEAGUES[ligue],
+        competition: COMPETITIONS[comp],
         nationalite: country.nom,
         age: Number(age),
-        note: n,
-        stats,
         valeurMarche: Number(valeur),
+        noteGenerale: n,
+        notoriete: Number(noto),
+        wikidataId: wikidata[id] ?? null,
+        stats,
         rarete: rareteOf(n),
+        perf: estimatePerf(p, n, h, rawPerf),
       };
     });
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const players = parseSource(SOURCE);
+export const WIKIDATA_IDS_FILE = new URL('./wikidata-ids.json', import.meta.url);
+
+export function readWikidataIds(): Record<string, string> {
+  return existsSync(WIKIDATA_IDS_FILE) ? JSON.parse(readFileSync(WIKIDATA_IDS_FILE, 'utf8')) : {};
+}
+
+export function writePlayers(players: Player[]): void {
   const out = '[\n' + players.map((p) => '  ' + JSON.stringify(p)).join(',\n') + '\n]\n';
   writeFileSync(new URL('../src/data/players.json', import.meta.url), out);
-  console.log(`✔ ${players.length} joueurs écrits dans src/data/players.json`);
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const players = parseSource(SOURCE, readWikidataIds());
+  writePlayers(players);
+  const withQ = players.filter((p) => p.wikidataId).length;
+  console.log(`✔ ${players.length} joueurs écrits dans src/data/players.json (${withQ} avec identifiant Wikidata)`);
 }
