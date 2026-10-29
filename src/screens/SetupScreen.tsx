@@ -75,7 +75,6 @@ export function SetupScreen() {
   const [draftOffer, setDraftOffer] = useState<DraftOffer>(settings.draftOffer);
   const [draftReroll, setDraftReroll] = useState(settings.draftReroll);
   const [pool, setPool] = useState(settings.pool);
-  const [expert, setExpert] = useState(settings.expert);
   const [verdict, setVerdict] = useState(settings.verdictDesPotes);
 
   const setName = (i: 0 | 1, v: string) => setNames((n) => (i === 0 ? [v, n[1]] : [n[0], v]));
@@ -99,7 +98,6 @@ export function SetupScreen() {
         draftReroll,
         timerSeconds,
         pool,
-        expert,
         perfWeight: settings.perfWeight,
         verdictDesPotes: verdict,
         seed,
@@ -150,7 +148,6 @@ export function SetupScreen() {
 
         <section className="rounded-2xl border border-line bg-night-2 px-3 py-1">
           <PoolPicker value={pool} onChange={setPool} />
-          <Toggle label="Mode Expert" hint="Ajoute des joueurs moins connus (notoriété 2)" checked={expert} onChange={setExpert} />
         </section>
 
         <section className="rounded-2xl border border-line bg-night-2 px-3 py-1">

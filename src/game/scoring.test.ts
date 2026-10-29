@@ -62,12 +62,12 @@ describe('score de performance par poste', () => {
 
   it('récompense les buts d’un buteur (normalisés par 90 min)', () => {
     const scorer = byId('viktor-gyokeres');
-    const quiet = byId('rasmus-hojlund');
+    const quiet = byId('gabriel-jesus');
     expect(perfScore(scorer)).toBeGreaterThan(perfScore(quiet) + 20);
   });
 
   it('un gardien est jugé sur arrêts, clean sheets et note — pas sur les buts', () => {
-    const gk = byId('mile-svilar');
+    const gk = byId('jan-oblak');
     const comps = perfBreakdown(gk).components.map((c) => c.key);
     expect(comps.sort()).toEqual(['arrets', 'cleanSheets', 'note']);
   });
@@ -170,16 +170,14 @@ describe('moments forts (Enchères)', () => {
 });
 
 describe('pioche', () => {
-  it('ne garde que la notoriété ≥ 3, ou ≥ 2 en mode Expert', () => {
-    const std = buildPool({ pool: 'toutes', expert: false }).map((id) => byId(id));
-    expect(std.every((p) => p.notoriete >= 3)).toBe(true);
-    expect(std.length).toBeGreaterThanOrEqual(400);
-    const expert = buildPool({ pool: 'toutes', expert: true });
-    expect(expert.length).toBeGreaterThan(std.length);
+  it('ne contient que des joueurs connus (notoriété ≥ 4)', () => {
+    const all = buildPool({ pool: 'toutes' }).map((id) => byId(id));
+    expect(all.every((p) => p.notoriete >= 4)).toBe(true);
+    expect(all.length).toBe(PLAYERS.length);
   });
 
   it('une compétition seule est complétée si un poste manque de joueurs', () => {
-    const ids = buildPool({ pool: 'Bundesliga', expert: false });
+    const ids = buildPool({ pool: 'Bundesliga' });
     const ps = ids.map((id) => byId(id));
     expect(ps.filter((p) => p.competition === 'Bundesliga').length).toBeGreaterThan(0);
     for (const poste of new Set(Object.values(SLOT_POSTE))) {

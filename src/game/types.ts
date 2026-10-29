@@ -104,8 +104,6 @@ export interface GameConfig {
   timerSeconds: number;
   /** Compétition unique (thème de toute la partie) ou toutes les compétitions. */
   pool: string | 'toutes';
-  /** Mode Expert : joueurs de notoriété 2 inclus. */
-  expert: boolean;
   /** Part des performances dans le score Enchères (le reste = collectif). */
   perfWeight: number;
   /** Vote « Verdict des potes » avant la révélation des performances. */

@@ -15,7 +15,6 @@ export interface Settings {
   tutorialSeen: boolean;
   /** Pool de joueurs par défaut : 'toutes' ou une compétition. */
   pool: string;
-  expert: boolean;
   /** Part des performances dans le score Enchères (0,5 à 1). */
   perfWeight: number;
   verdictDesPotes: boolean;
@@ -32,7 +31,6 @@ export const DEFAULT_SETTINGS: Settings = {
   vibrations: true,
   tutorialSeen: false,
   pool: 'toutes',
-  expert: false,
   perfWeight: 0.85,
   verdictDesPotes: true,
 };

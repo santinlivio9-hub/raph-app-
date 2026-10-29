@@ -25,7 +25,6 @@ export const DEFAULT_CONFIG: Omit<GameConfig, 'seed'> = {
   draftReroll: true,
   timerSeconds: 10,
   pool: 'toutes',
-  expert: false,
   perfWeight: 0.85,
   verdictDesPotes: true,
 };

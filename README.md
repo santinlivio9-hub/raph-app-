@@ -34,7 +34,7 @@ Postes remplis dans l'ordre gardien → défense → milieu → attaque (ou alé
 
 **Pool de joueurs** (au lancement) : toutes les compétitions, ou une seule (Ligue 1, Premier League, Liga,
 Serie A, Bundesliga) — toute la partie prend alors le thème visuel de cette compétition.
-**Mode Expert** : ajoute les joueurs moins connus (notoriété 2).
+Seuls des **joueurs connus** sont en jeu : tous ceux qu'un fan de foot reconnaît (notoriété ≥ 4 sur 5).
 
 ### Mode Enchères
 - Chacun démarre avec **1 500 M€** (réglable) et **1 joker**.
@@ -100,7 +100,8 @@ aucun = 10.
 ## Données et photos
 
 ### Joueurs — `src/data/players.json`
-- **470 joueurs**, dont **407 de notoriété ≥ 3** (au moins 35 par poste) ; 63 de notoriété 2 réservés au mode Expert.
+- **296 joueurs, tous connus** (notoriété 4 ou 5 sur 5) : de 28 à 68 par poste (GK 29, DC 41, DG 29, DD 28, MC 68,
+  AG 31, AD 28, BU 42). Les joueurs moins connus ont été retirés de la base, et le mode Expert supprimé.
 - Champs : `id, nom, prenom, poste, postesSecondaires, club, competition, nationalite, age, valeurMarche,
   noteGenerale, notoriete, wikidataId, stats, rarete, perf {saison, matchs, minutes, buts, passesD, cleanSheets,
   arrets, tacles, interceptions, noteMoyenne}`.
@@ -109,13 +110,13 @@ aucun = 10.
   Performances = **saison 2024-25, championnat, saisies de mémoire** : matchs, minutes, buts, passes, clean sheets
   et note moyenne sont des estimations ; **tacles, interceptions et arrêts sont calculés** à partir du poste, du
   niveau et du temps de jeu. Pour des chiffres officiels : `npm run data:update-stats` (API-Football).
-- Répartition des prix (notoriété ≥ 3) : **8 % ≥ 80 M€**, **55 % entre 20 et 80 M€**, **37 % < 20 M€**.
+- Répartition des prix : **11 % ≥ 80 M€**, **52 % entre 20 et 80 M€**, **37 % < 20 M€**.
   Le cahier des charges visait ~20/40/40, mais il n'existe qu'une quarantaine de joueurs réellement estimés
   80 M€ ou plus : on a préféré rester fidèle aux vraies valeurs plutôt que de les gonfler.
 
 ### Photos — `src/data/photos.json`
 - **Wikimedia Commons via Wikidata** (propriété P18), licences libres uniquement (CC BY, CC BY-SA, CC0,
-  domaine public) : **457 joueurs sur 470** ont une photo ; les autres ont un avatar (initiales, couleur neutre du club).
+  domaine public) : **294 joueurs sur 296** ont une photo ; les autres ont un avatar (initiales, couleur neutre du club).
 - `scripts/fetch-photos.ts` : identifiant Wikidata par libellé + métier « footballeur » + année de naissance cohérente
   (repli : titre de l'article Wikipédia), puis vignette 330 px, **auteur et licence** via l'API Commons.
   Corrections manuelles documentées dans le script (Gnabry : date de naissance erronée sur Wikidata ;
@@ -150,7 +151,7 @@ src/
     draft.ts         ordre serpent, offres de 6 cartes, relance
     performance.ts   score de performance 0–100 par poste
     scoring.ts       collectif, scores d'équipe, vainqueur, moments forts
-    pool.ts          pioche (notoriété, compétition, complément)
+    pool.ts          pioche (compétition choisie, complément si un poste manque)
     bot.ts           décisions du bot (3 niveaux)
     simulation.ts    simulation de match
     game.ts          createGame + gameReducer(state, action) pur

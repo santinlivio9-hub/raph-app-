@@ -5,9 +5,10 @@ import type { Player, Poste } from '../src/game/types.ts';
 import { rareteOf } from './build-players.ts';
 
 const POSTES: Poste[] = ['GK', 'DC', 'DG', 'DD', 'MC', 'AG', 'AD', 'BU'];
-const MIN_PAR_POSTE = 35;
-const MIN_TOTAL = 400;
-const NOTORIETE_STANDARD = 3;
+// La base ne garde que des joueurs que tout fan reconnaît : assez par poste pour des parties variées.
+const MIN_PAR_POSTE = 25;
+const MIN_TOTAL = 250;
+const NOTORIETE_STANDARD = 4;
 
 const players: Player[] = JSON.parse(readFileSync(new URL('../src/data/players.json', import.meta.url), 'utf8'));
 const errors: string[] = [];
@@ -65,7 +66,7 @@ const standard = players.filter((p) => p.notoriete >= NOTORIETE_STANDARD);
 const parPoste = Object.fromEntries(POSTES.map((po) => [po, standard.filter((p) => p.poste === po).length])) as Record<Poste, number>;
 if (standard.length < MIN_TOTAL) err(undefined, `seulement ${standard.length} joueurs de notoriété ≥ ${NOTORIETE_STANDARD} (minimum ${MIN_TOTAL})`);
 for (const poste of POSTES) {
-  if (parPoste[poste] < MIN_PAR_POSTE) err(undefined, `poste ${poste} : ${parPoste[poste]} joueurs de notoriété ≥ 3 (minimum ${MIN_PAR_POSTE})`);
+  if (parPoste[poste] < MIN_PAR_POSTE) err(undefined, `poste ${poste} : ${parPoste[poste]} joueurs (minimum ${MIN_PAR_POSTE})`);
 }
 
 // Répartition des prix : on vise ~20 / 40 / 40 mais on reste fidèle aux vraies valeurs marché,
@@ -77,7 +78,8 @@ if (pct('stars') < 5) err(undefined, `trop peu de stars (${pct('stars')} %)`);
 if (pct('titulaires') < 30 || pct('titulaires') > 60) err(undefined, `part de titulaires anormale (${pct('titulaires')} %)`);
 if (pct('moyens') < 30 || pct('moyens') > 55) err(undefined, `part de joueurs moyens anormale (${pct('moyens')} %)`);
 
-console.log(`${players.length} joueurs (${standard.length} de notoriété ≥ 3) —`, POSTES.map((p) => `${p}:${parPoste[p]}`).join(' '));
+if (standard.length !== players.length) err(undefined, `${players.length - standard.length} joueur(s) de notoriété < ${NOTORIETE_STANDARD} : à retirer`);
+console.log(`${players.length} joueurs connus —`, POSTES.map((p) => `${p}:${parPoste[p]}`).join(' '));
 console.log(`Prix : stars ≥ 80 M€ ${pct('stars')} % · titulaires 20–80 M€ ${pct('titulaires')} % · moyens < 20 M€ ${pct('moyens')} %`);
 console.log(`Wikidata : ${players.filter((p) => p.wikidataId).length}/${players.length} identifiants`);
 

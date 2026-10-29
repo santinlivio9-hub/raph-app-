@@ -12,7 +12,6 @@ export function SettingsScreen() {
       <p className="mb-3 text-sm text-muted">Valeurs par défaut des nouvelles parties (modifiables à la création).</p>
       <div className="flex flex-col gap-1 rounded-2xl border border-line bg-night-2 px-3 py-2">
         <PoolPicker value={s.pool} onChange={(v) => s.update({ pool: v })} />
-        <Toggle label="Mode Expert" hint="Débloque les joueurs de notoriété 2" checked={s.expert} onChange={(v) => s.update({ expert: v })} />
         <Segmented<number>
           label="Score Enchères : performances / collectif"
           value={s.perfWeight}
